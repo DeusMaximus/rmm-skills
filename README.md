@@ -108,7 +108,7 @@ The shared conventions (non-interactive execution, SYSTEM/root context, stdout/s
 | NinjaOne Dropdown GUIDs | Dropdown and MultiSelect fields return GUIDs by default. Use `-Type Dropdown` (PowerShell) or the `options` command (CLI) to get friendly names. |
 | NinjaOne Secure Fields | Write-only for documentation fields. Only accessible during automation execution — not from web terminal or local terminal. Limited to 200 characters. |
 | Linux `ninjarmm-cli` | Must use `./ninjarmm-cli` or the full path `/opt/NinjaRMMAgent/programdata/ninjarmm-cli`. Bare `ninjarmm-cli` won't resolve. |
-| macOS Privilege Context | Default is **user context**, not root. This is the opposite of Windows (SYSTEM) and Linux (root), however root level scripts can be requested (`sudo` not required). |
+| macOS Privilege Context | Default is **user context**, not root. This is the opposite of Windows (SYSTEM) and Linux (root), however root level scripts can be explicitly requested (`sudo` not required). |
 
 ## Contributing
 
