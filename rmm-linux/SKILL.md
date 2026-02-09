@@ -27,7 +27,7 @@ Do **NOT** use this skill for:
 
 If in doubt, ask the user whether the script is intended for RMM deployment before applying these constraints.
 
-For shared conventions (non-interactive execution, security, idempotency, logging, code review mode, response structure), see `RMM-CONVENTIONS.md` in this skill directory.
+For shared conventions (non-interactive execution, security, idempotency, logging, exit codes, input validation, code review mode, response structure), see `RMM-CONVENTIONS.md` in this skill directory.
 
 ## Compatibility Constraint: Bash 4.x+
 
@@ -43,7 +43,45 @@ For shared conventions (non-interactive execution, security, idempotency, loggin
 
 **Default assumption: root account** (Administrative Context)
 
-- If user specifies execution as a **standard user**, avoid administrative tasks (modifying system files outside `$HOME`, managing services) or clearly flag that elevation is required
+Scripts can run as either **root** or a **standard user** in NinjaOne. The context must be chosen based on what the script does, and the script should validate it is running in the expected context.
+
+### Root Context (Default)
+
+- Full administrative privileges
+- Access to NinjaOne custom fields via `ninjarmm-cli` (get, set, options, etc.)
+- Can modify system files, manage services, install packages, edit `/etc/` configuration
+- **Cannot** reliably access per-user resources (user home directories, user crontabs, user-specific config)
+
+### Standard User Context
+
+Use when the script operates on per-user resources:
+
+- User home directory files and configuration
+- User-specific application settings
+- User crontabs
+- User-scoped environment
+
+**Critical limitation:** When running as a standard user, **NinjaOne custom fields are NOT accessible**. The `ninjarmm-cli` binary only functions under the root context. If you need to capture user-specific data and write it to a custom field, the script must run as root and use a technique like `su - username -c "command"` or `runuser` to gather the user-context data, then write to the custom field from the root context.
+
+### Context Validation
+
+Scripts should validate they are running in the expected context:
+
+```bash
+# Fail if not running as root
+if [[ "$(id -u)" -ne 0 ]]; then
+    log_error "This script must run as root. Change the execution context in NinjaOne."
+    exit 1
+fi
+```
+
+```bash
+# Fail if running as root when user context is required
+if [[ "$(id -u)" -eq 0 ]]; then
+    log_error "This script must run as a standard user, not root. Change the execution context in NinjaOne."
+    exit 1
+fi
+```
 
 ## Mandatory Script Structure
 
@@ -113,6 +151,64 @@ If the script accepts parameters, it MUST include:
 - Use `readonly` for constants
 - Use `local` for function-scoped variables
 
+## NinjaOne Script Variables (Environment Variables)
+
+NinjaOne passes script inputs via **environment variables** configured in the script settings. These are distinct from Custom Fields.
+
+### Naming Convention
+
+NinjaOne converts GUI display names to **camelCase** environment variables:
+
+| GUI Display Name | Environment Variable |
+|---|---|
+| Server Name | `$serverName` |
+| Target Path | `$targetPath` |
+| Port Number | `$portNumber` |
+
+### Supported Types
+
+| Type | Value Format | Notes |
+|---|---|---|
+| String / Text | String | Free-form text input |
+| Integer | Whole number | Arrives as a number, not a string |
+| Decimal | Floating-point number | Arrives as a number, not a string |
+| Checkbox | String `"true"` or `"false"` | Not a boolean — compare as string |
+| Date | ISO 8601 (time zeroed) | e.g., `2026-02-09T00:00:00` |
+| Date and Time | ISO 8601 | e.g., `2026-02-09T14:30:00` |
+| Dropdown | String | Selected option value |
+| IP Address | String | IPv4/IPv6 address |
+
+### Validation Pattern
+
+NinjaOne allows marking variables as mandatory in the UI, but scripts should still validate as a defence-in-depth measure:
+
+```bash
+# Validate required environment variable inputs
+missing_params=()
+[[ -z "${serverName:-}" ]] && missing_params+=("serverName")
+[[ -z "${targetPath:-}" ]] && missing_params+=("targetPath")
+
+if [[ ${#missing_params[@]} -gt 0 ]]; then
+    log_error "Missing required script variable(s): ${missing_params[*]}"
+    exit 1
+fi
+```
+
+> **Note:** Use `${varName:-}` when checking with `set -u` enabled to avoid triggering an unset variable error during validation.
+
+### Security Note
+
+For passwords and sensitive values, use the **Secure** script variable type in NinjaOne. This masks the value in the NinjaOne UI and logs.
+
+### Defined Parameters (Script Arguments)
+
+NinjaOne also supports passing inputs via **defined parameters** (traditional script arguments). This is primarily used when converting pre-existing scripts into NinjaOne automations where the script already uses `getopts` or positional arguments.
+
+- You specify a list of commonly used parameters in the NinjaOne script settings
+- These map to the script's existing argument parsing
+- You **cannot** mark individual parameters as mandatory or optional in the NinjaOne UI — handle that in the script itself
+- Environment variables and defined parameters can coexist, but environment variables are the preferred approach for new scripts
+
 ## Distribution Awareness
 
 Be aware that commands differ between distributions:
@@ -149,6 +245,8 @@ If the user provides a PowerShell script and asks for the Linux equivalent:
 ## NinjaOne Custom Fields (CLI on Linux)
 
 On Linux, there is **no PowerShell module** — you interact with custom fields directly via the `ninjarmm-cli` binary.
+
+**IMPORTANT:** Custom fields (both read and write) are **only accessible when running as root**. They do not work in standard user context.
 
 **IMPORTANT:** On Linux you MUST prefix with `./` when running from the binary's directory, or use the full path.
 
@@ -206,6 +304,7 @@ ninjarmm-cli org-clear "template name" "document name" fieldName
 
 ### Important Notes
 
+- **Root context only** — custom fields are not accessible when running as a standard user
 - Exit codes: `0` = success, `1` = error
 - Dropdown/MultiSelect values are **GUIDs** — use `options` command to map friendly names
 - Secure fields are **write-only** for documentation and only accessible during automation execution

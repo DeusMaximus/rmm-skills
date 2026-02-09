@@ -27,7 +27,7 @@ Do **NOT** use this skill for:
 
 If in doubt, ask the user whether the script is intended for RMM deployment before applying these constraints.
 
-For shared conventions (non-interactive execution, security, idempotency, logging, code review mode, response structure), see `RMM-CONVENTIONS.md` in this skill directory.
+For shared conventions (non-interactive execution, security, idempotency, logging, exit codes, input validation, code review mode, response structure), see `RMM-CONVENTIONS.md` in this skill directory.
 
 ## Compatibility Constraint: zsh on macOS
 
@@ -49,11 +49,34 @@ This is the opposite of Windows/Linux defaults. Most NinjaOne macOS scripts run 
 - Suitable for: mapping printers, changing user-level `defaults` (e.g., `defaults write com.apple.dock ...`), modifying files in `$HOME`
 - **Absolutely NO `sudo`** — it will fail non-interactively
 
+**Critical limitation:** When running as the logged-in user, **NinjaOne custom fields are NOT accessible**. The `ninjarmm-cli` binary only functions under the root context. If you need to capture user-specific data and write it to a custom field, the script must run as root and use a technique like `su - username -c "command"` or `launchctl asuser` to gather the user-context data, then write to the custom field from the root context.
+
 ### Root-Context Tasks (only when user explicitly states)
 
 - If user says "runs as root" or "install software" or "RMM agent task as root", then root-level commands are acceptable
 - `sudo` itself is unnecessary (the script IS root), but root-level paths and operations are allowed
+- Access to NinjaOne custom fields via `ninjarmm-cli` (get, set, options, etc.)
 - **MUST clearly state in the technical explanation** that root privileges are required
+
+### Context Validation
+
+Scripts should validate they are running in the expected context:
+
+```zsh
+# Fail if running as root when user context is required
+if [[ "$(id -u)" -eq 0 ]]; then
+    log_error "This script must run as the logged-in user, not root. Change the execution context in NinjaOne."
+    exit 1
+fi
+```
+
+```zsh
+# Fail if not running as root when root context is required
+if [[ "$(id -u)" -ne 0 ]]; then
+    log_error "This script must run as root. Change the execution context in NinjaOne."
+    exit 1
+fi
+```
 
 ## Mandatory Script Structure
 
@@ -99,6 +122,64 @@ Every script MUST start with `set -euo pipefail`:
 - Use `readonly` for constants
 - For notifications (non-blocking only): `osascript -e 'display notification ...'` is acceptable; modal dialogs are NOT
 
+## NinjaOne Script Variables (Environment Variables)
+
+NinjaOne passes script inputs via **environment variables** configured in the script settings. These are distinct from Custom Fields.
+
+### Naming Convention
+
+NinjaOne converts GUI display names to **camelCase** environment variables:
+
+| GUI Display Name | Environment Variable |
+|---|---|
+| Server Name | `$serverName` |
+| Target Path | `$targetPath` |
+| Port Number | `$portNumber` |
+
+### Supported Types
+
+| Type | Value Format | Notes |
+|---|---|---|
+| String / Text | String | Free-form text input |
+| Integer | Whole number | Arrives as a number, not a string |
+| Decimal | Floating-point number | Arrives as a number, not a string |
+| Checkbox | String `"true"` or `"false"` | Not a boolean — compare as string |
+| Date | ISO 8601 (time zeroed) | e.g., `2026-02-09T00:00:00` |
+| Date and Time | ISO 8601 | e.g., `2026-02-09T14:30:00` |
+| Dropdown | String | Selected option value |
+| IP Address | String | IPv4/IPv6 address |
+
+### Validation Pattern
+
+NinjaOne allows marking variables as mandatory in the UI, but scripts should still validate as a defence-in-depth measure:
+
+```zsh
+# Validate required environment variable inputs
+missing_params=()
+[[ -z "${serverName:-}" ]] && missing_params+=("serverName")
+[[ -z "${targetPath:-}" ]] && missing_params+=("targetPath")
+
+if [[ ${#missing_params[@]} -gt 0 ]]; then
+    log_error "Missing required script variable(s): ${missing_params[*]}"
+    exit 1
+fi
+```
+
+> **Note:** Use `${varName:-}` when checking with `set -u` enabled to avoid triggering an unset variable error during validation.
+
+### Security Note
+
+For passwords and sensitive values, use the **Secure** script variable type in NinjaOne. This masks the value in the NinjaOne UI and logs.
+
+### Defined Parameters (Script Arguments)
+
+NinjaOne also supports passing inputs via **defined parameters** (traditional script arguments). This is primarily used when converting pre-existing scripts into NinjaOne automations where the script already uses positional arguments or option parsing.
+
+- You specify a list of commonly used parameters in the NinjaOne script settings
+- These map to the script's existing argument parsing
+- You **cannot** mark individual parameters as mandatory or optional in the NinjaOne UI — handle that in the script itself
+- Environment variables and defined parameters can coexist, but environment variables are the preferred approach for new scripts
+
 ## Cross-Platform Translation (PowerShell → macOS)
 
 If the user provides a PowerShell script and asks for the macOS equivalent:
@@ -118,6 +199,8 @@ If the user provides a PowerShell script and asks for the macOS equivalent:
 ## NinjaOne Custom Fields (CLI on macOS)
 
 On macOS, there is **no PowerShell module** — you interact with custom fields directly via the `ninjarmm-cli` binary.
+
+**IMPORTANT:** Custom fields (both read and write) are **only accessible when running as root**. They do not work in user context. Since macOS scripts default to user context, you must explicitly run the script as root if custom field access is needed.
 
 ### Binary Location
 
@@ -166,6 +249,7 @@ ninjarmm-cli org-clear "template name" "document name" fieldName
 
 ### Important Notes
 
+- **Root context only** — custom fields are not accessible when running as the logged-in user
 - Exit codes: `0` = success, `1` = error
 - Dropdown/MultiSelect values are **GUIDs** — use `options` command to map friendly names
 - Secure fields are **write-only** for documentation and only accessible during automation execution

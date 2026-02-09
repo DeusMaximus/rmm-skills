@@ -28,7 +28,7 @@ Do **NOT** use this skill for:
 
 If in doubt, ask the user whether the script is intended for RMM deployment before applying these constraints.
 
-For shared conventions (non-interactive execution, security, idempotency, logging, code review mode, response structure), see `RMM-CONVENTIONS.md` in this skill directory.
+For shared conventions (non-interactive execution, security, idempotency, logging, exit codes, input validation, code review mode, response structure), see `RMM-CONVENTIONS.md` in this skill directory.
 
 ## STRICT VERSION CONSTRAINT: PowerShell 5.1
 
@@ -51,7 +51,40 @@ If unsure whether a feature exists in 5.1, err on the side of using the older eq
 
 **Default assumption: SYSTEM account** (Administrative Context)
 
-- If the user specifies execution as a **standard user**, avoid administrative tasks (modifying global settings, system-wide registry hives, services) or clearly flag that the task requires elevation
+Scripts can run as either **SYSTEM** or the **logged-in user** in NinjaOne. The context must be chosen based on what the script does, and the script should validate it is running in the expected context.
+
+### SYSTEM Context (Default)
+
+- Full administrative privileges
+- Access to NinjaOne custom fields (`Get-NinjaProperty`, `Set-NinjaProperty`, etc.)
+- Can modify system-wide settings, services, registry (HKLM), and install software
+- **Cannot** access per-user resources (mapped drives, Credential Manager, HKCU, user profile paths)
+
+### Logged-in User Context
+
+Use when the script operates on per-user resources:
+
+- Mapped network drives
+- Windows Credential Manager
+- User-specific registry (HKCU)
+- User profile files and folders
+- Per-user printer mappings
+- User-scoped application settings
+
+**Critical limitation:** When running as the logged-in user, **NinjaOne custom fields are NOT accessible**. The PowerShell module commands (`Get-NinjaProperty`, `Set-NinjaProperty`) and the `ninjarmm-cli.exe` binary will not function. If you need to capture user-context data and write it to a custom field, the script must run as SYSTEM and use a "run as user" technique to gather the data.
+
+### Hybrid Pattern: SYSTEM Script Gathering User Data
+
+When a SYSTEM-context script needs user-specific information (e.g., `whoami /upn`, user environment variables):
+
+```powershell
+# Example: Run a command as the logged-in user from a SYSTEM context script
+# This requires additional tooling such as:
+# - A scheduled task that runs as the interactive user
+# - PSExec with -i flag
+# - NinjaOne's built-in "run as logged-in user" functionality for a separate script
+# Then write the result to a custom field from the SYSTEM script.
+```
 
 ## Mandatory Script Structure
 
@@ -66,7 +99,7 @@ Every script MUST include `[CmdletBinding()]` and `param()` blocks **unless** th
 
 This list will be updated as other RMM platform incompatibilities are discovered. If the user doesn't specify which RMM, default to including `[CmdletBinding()]` and `param()` (NinjaOne style) and note the Action1 caveat.
 
-### NinjaOne Script Template
+### NinjaOne Script Template (SYSTEM Context)
 
 ```powershell
 #Requires -Version 5.1
@@ -87,6 +120,48 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Validate execution context
+$CurrentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+if ($CurrentUser -notmatch '\\SYSTEM$' -and $CurrentUser -ne 'NT AUTHORITY\SYSTEM') {
+    Write-Error "This script must run as SYSTEM, not '$CurrentUser'. Change the execution context in NinjaOne."
+    exit 1
+}
+```
+
+### NinjaOne Script Template (Logged-in User Context)
+
+```powershell
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+    Brief description
+.DESCRIPTION
+    Detailed description
+
+    This script runs as the logged-in user because [reason — e.g., mapped drives,
+    Credential Manager, HKCU registry are per-user resources].
+
+    NinjaOne custom fields are NOT available in this context.
+.NOTES
+    Author:  [Author]
+    Date:    [Date]
+    Context: Runs as LOGGED-IN USER via RMM (NinjaOne)
+#>
+
+[CmdletBinding()]
+param()
+
+$ErrorActionPreference = 'Stop'
+
+# Validate execution context — must NOT be SYSTEM
+$CurrentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+if ($CurrentUser -match '\\SYSTEM$' -or $CurrentUser -eq 'NT AUTHORITY\SYSTEM') {
+    Write-Error "This script must run as the logged-in user, not SYSTEM. In NinjaOne, set the script to run as 'Logged-in User'."
+    exit 1
+}
+
+Write-Output "Running as user: $CurrentUser"
 ```
 
 ### Action1 Script Template
@@ -123,6 +198,75 @@ $ErrorActionPreference = 'Stop'
 - Use approved verbs for function names (`Get-`, `Set-`, `New-`, `Remove-`, etc.)
 - Prefer splatting for cmdlets with many parameters
 
+## NinjaOne Script Variables (Environment Variables)
+
+NinjaOne passes script inputs via **environment variables** configured in the script settings. These are distinct from Custom Fields.
+
+### Naming Convention
+
+NinjaOne converts GUI display names to **camelCase** environment variables:
+
+| GUI Display Name | Environment Variable |
+|---|---|
+| Drive Letter | `$env:driveLetter` |
+| Server Name | `$env:serverName` |
+| Target Path | `$env:targetPath` |
+
+### Supported Types
+
+| Type | Value Format | Cast Example |
+|---|---|---|
+| String / Text | String | Direct use |
+| Integer | Whole number | Direct use or `[int]$env:portNumber` |
+| Decimal | Floating-point number | Direct use or `[decimal]$env:threshold` |
+| Checkbox | String `"true"` or `"false"` | `if ($env:enableFeature -eq 'true') { ... }` |
+| Date | ISO 8601 (time zeroed) | `[datetime]$env:startDate` |
+| Date and Time | ISO 8601 | `[datetime]$env:scheduledTime` |
+| Dropdown | String (selected option) | Direct use |
+| IP Address | String | Direct use or `[ipaddress]$env:targetIp` |
+
+> Integer and Decimal arrive as their numeric types. Checkbox arrives as the string `"true"` or `"false"` — not a PowerShell boolean, so compare with `-eq 'true'` or cast explicitly. Dates arrive as ISO 8601 strings (e.g., `2026-02-09T00:00:00` for date-only). Everything else is a string.
+
+### Validation Pattern
+
+NinjaOne allows marking variables as mandatory in the UI, but scripts should still validate as a defence-in-depth measure:
+
+```powershell
+$MissingParams = @()
+if ([string]::IsNullOrWhiteSpace($env:serverName)) { $MissingParams += 'serverName' }
+if ([string]::IsNullOrWhiteSpace($env:targetPath)) { $MissingParams += 'targetPath' }
+
+if ($MissingParams.Count -gt 0) {
+    Write-Error "Missing required script variable(s): $($MissingParams -join ', ')"
+    exit 1
+}
+```
+
+### Security Note
+
+For passwords and sensitive values, use the **Secure** script variable type in NinjaOne. This masks the value in the NinjaOne UI and logs. The value still arrives as a plain string in `$env:`, but is not persisted visibly in the NinjaOne console.
+
+### Defined Parameters (Script Arguments)
+
+NinjaOne also supports passing inputs via **defined parameters** — traditional script arguments that map to the `param()` block. This is primarily used when converting pre-existing scripts into NinjaOne automations.
+
+- You specify a list of commonly used parameters in the NinjaOne script settings
+- These map directly to the script's `param()` block
+- You **cannot** mark individual parameters as mandatory or optional in the NinjaOne UI — handle that in the script itself (via `[Parameter(Mandatory)]` or manual validation)
+- Environment variables and defined parameters can coexist, but environment variables are the preferred approach for new scripts
+
+```powershell
+# Example: Script with defined parameters (for legacy/converted scripts)
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory)]
+    [string]$ServerName,
+
+    [Parameter()]
+    [int]$Port = 443
+)
+```
+
 ## Cross-Platform Translation (to PowerShell)
 
 If the user provides a macOS (zsh) or Linux (bash) script and asks for the Windows equivalent:
@@ -141,6 +285,8 @@ If the user provides a macOS (zsh) or Linux (bash) script and asks for the Windo
 ## NinjaOne Custom Fields (PowerShell Module)
 
 On Windows, NinjaOne deploys a PowerShell module automatically. Use these cmdlets instead of calling ninjarmm-cli.exe directly.
+
+**IMPORTANT:** Custom fields (both read and write) are **only accessible when running as SYSTEM**. They do not work in logged-in user context.
 
 ### Modern Commands (Recommended)
 
@@ -188,6 +334,7 @@ Ninja-Property-Docs-Options-Single "templateName" "fieldName"
 
 ### Important Notes
 
+- **SYSTEM context only** — custom fields are not accessible when running as the logged-in user
 - Secure fields are **write-only** for documentation fields
 - Secure fields are only accessible during **automation execution** (not from web/local terminal)
 - Secure fields are limited to **200 characters**
