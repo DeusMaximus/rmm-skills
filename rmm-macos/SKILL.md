@@ -91,7 +91,7 @@ fi
 set -euo pipefail
 
 # --- Configuration -----------------------------------------------------------
-readonly SCRIPT_NAME="${0:t}"
+readonly SCRIPT_NAME="script_name"
 # Parameters / environment variables here
 
 # --- Functions ---------------------------------------------------------------
@@ -106,6 +106,8 @@ log_error() {
 
 # --- Main --------------------------------------------------------------------
 ```
+
+> **NinjaOne caveat:** Do NOT use `${0:t}` or any `$0`-derived value for `SCRIPT_NAME`. NinjaOne copies scripts to a temporary path (e.g., `/private/var/folders/.../ninjaAgentCurrentScript_0.sh`) before execution, so `$0` will always resolve to a meaningless generated filename. Combined with `set -u`, an unset or empty `$0` will crash the script immediately. Always hardcode `SCRIPT_NAME` to the actual script name.
 
 ### Error Handling
 
@@ -270,7 +272,7 @@ pmset -a displaysleep 10
 #!/bin/zsh
 set -euo pipefail
 
-readonly SCRIPT_NAME="${0:t}"
+readonly SCRIPT_NAME="enable-screensaver-password"
 
 log_info() { echo "[INFO] ${SCRIPT_NAME}: $1"; }
 log_error() { echo "ERROR: ${SCRIPT_NAME}: $1" >&2; }
