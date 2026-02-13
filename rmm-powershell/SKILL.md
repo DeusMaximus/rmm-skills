@@ -3,7 +3,7 @@ name: rmm-powershell-scripts
 description: Create and review PowerShell 5.1 scripts specifically for NinjaOne or Action1 RMM deployment. ONLY use when the user explicitly mentions RMM, NinjaOne, Action1, or background agent deployment. Do NOT use for general PowerShell scripting.
 metadata:
   author: DeusMaximus and Claude
-  version: 1.2.0
+  version: "1.2.0"
   tags: [rmm, powershell, ninjaone, action1, windows]
 ---
 
