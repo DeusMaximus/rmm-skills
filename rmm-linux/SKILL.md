@@ -4,7 +4,6 @@ description: Create and review bash scripts specifically for NinjaOne or Action1
 metadata:
   author: DeusMaximus and Claude
   version: "1.2.0"
-  tags: [rmm, bash, linux, ninjaone, action1]
 ---
 
 # RMM Linux Shell Script Expert

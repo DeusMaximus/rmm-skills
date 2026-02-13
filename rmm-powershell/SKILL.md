@@ -4,7 +4,6 @@ description: Create and review PowerShell 5.1 scripts specifically for NinjaOne 
 metadata:
   author: DeusMaximus and Claude
   version: "1.2.0"
-  tags: [rmm, powershell, ninjaone, action1, windows]
 ---
 
 # RMM PowerShell Script Expert

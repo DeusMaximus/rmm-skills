@@ -4,7 +4,6 @@ description: Create and review zsh scripts specifically for NinjaOne or Action1 
 metadata:
   author: DeusMaximus and Claude
   version: "1.2.0"
-  tags: [rmm, zsh, macos, ninjaone, action1]
 ---
 
 # RMM macOS Shell Script Expert
