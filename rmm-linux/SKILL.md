@@ -1,6 +1,10 @@
 ---
 name: rmm-linux-scripts
 description: Create and review bash scripts specifically for NinjaOne or Action1 RMM deployment to Linux servers. ONLY use when the user explicitly mentions RMM, NinjaOne, Action1, or background agent deployment targeting Linux. Do NOT use for general shell scripting.
+metadata:
+  author: DeusMaximus and Claude
+  version: 1.2.0
+  tags: [rmm, bash, linux, ninjaone, action1]
 ---
 
 # RMM Linux Shell Script Expert
@@ -96,7 +100,7 @@ fi
 set -euo pipefail
 
 # --- Configuration -----------------------------------------------------------
-readonly SCRIPT_NAME="$(basename "$0")"
+readonly SCRIPT_NAME="script_name"
 # Parameters / environment variables here
 
 # --- Functions ---------------------------------------------------------------
@@ -126,6 +130,8 @@ log_error() {
 
 # --- Main --------------------------------------------------------------------
 ```
+
+> **NinjaOne caveat:** Do NOT use `$(basename "$0")` or any `$0`-derived value for `SCRIPT_NAME`. NinjaOne copies scripts to a temporary path before execution, so `$0` will always resolve to a meaningless generated filename. Combined with `set -u`, an unset or empty `$0` can crash the script immediately. Always hardcode `SCRIPT_NAME` to a descriptive name for the script.
 
 ### Error Handling
 
@@ -327,7 +333,7 @@ systemctl start nginx
 #!/bin/bash
 set -euo pipefail
 
-readonly SCRIPT_NAME="$(basename "$0")"
+readonly SCRIPT_NAME="configure-dns-nginx"
 readonly DNS_SERVER="8.8.8.8"
 
 log_info() { echo "[INFO] ${SCRIPT_NAME}: $1"; }
