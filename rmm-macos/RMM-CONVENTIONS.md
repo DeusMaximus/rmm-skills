@@ -65,6 +65,7 @@ When running as the logged-in user:
 - **NinjaOne custom fields are NOT accessible.** The `ninjarmm-cli` binary and the PowerShell module (`Get-NinjaProperty`, `Set-NinjaProperty`, etc.) only function under the SYSTEM/root context. This applies to **all platforms** (Windows, macOS, Linux).
 - If you need to capture user-specific data (e.g., `whoami /upn`, user environment details) and write it to a custom field, the script must run as SYSTEM and use a "run as user" technique (e.g., PowerShell's `Invoke-Command` with the user's token, or a scheduled task trick) to gather the user-context data, then write to the custom field from the SYSTEM context.
 - Mapped drives, Credential Manager, HKCU registry, user profile operations, and printer mappings are all per-user and require user context.
+- **Windows Server (RDP) — unreliable user targeting.** On Windows Server with Remote Desktop Services, NinjaOne's "run as logged-in user" does not allow targeting a specific user session. It will pick either the console session or an arbitrary RDP session, meaning user-centric scripts (e.g., clearing app caches, modifying HKCU) may execute against the **wrong user**. Windows user-context scripts should include a Server OS guard that blocks execution on Windows Server unless the user explicitly requests otherwise.
 
 ## NinjaOne Script Variables (Environment Variables)
 

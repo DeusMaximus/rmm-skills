@@ -3,7 +3,7 @@ name: rmm-powershell-scripts
 description: Create and review PowerShell 5.1 scripts specifically for NinjaOne or Action1 RMM deployment. ONLY use when the user explicitly mentions RMM, NinjaOne, Action1, or background agent deployment. Do NOT use for general PowerShell scripting.
 metadata:
   author: DeusMaximus and Claude
-  version: "1.2.0"
+  version: "1.2.1"
 ---
 
 # RMM PowerShell Script Expert
@@ -75,6 +75,8 @@ Use when the script operates on per-user resources:
 - User-scoped application settings
 
 **Critical limitation:** When running as the logged-in user, **NinjaOne custom fields are NOT accessible**. The PowerShell module commands (`Get-NinjaProperty`, `Set-NinjaProperty`) and the `ninjarmm-cli.exe` binary will not function. If you need to capture user-context data and write it to a custom field, the script must run as SYSTEM and use a "run as user" technique to gather the data.
+
+**Critical limitation — Windows Server (RDP):** On Windows Server with Remote Desktop Services, NinjaOne's "run as logged-in user" does **not** allow you to target a specific user session. It will pick either the console session or an arbitrary RDP session. For user-centric automations (e.g., clearing Teams cache, modifying HKCU, managing user profile files), this means the script may silently run against the **wrong user**. User-context scripts MUST include a Server OS guard that blocks execution on Windows Server unless the user explicitly requests otherwise — see the template below.
 
 ### Hybrid Pattern: SYSTEM Script Gathering User Data
 
@@ -161,6 +163,13 @@ $ErrorActionPreference = 'Stop'
 $CurrentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 if ($CurrentUser -match '\\SYSTEM$' -or $CurrentUser -eq 'NT AUTHORITY\SYSTEM') {
     Write-Error "This script must run as the logged-in user, not SYSTEM. In NinjaOne, set the script to run as 'Logged-in User'."
+    exit 1
+}
+
+# Block execution on Windows Server — NinjaOne cannot target a specific RDP user session
+$OSCaption = (Get-CimInstance -ClassName Win32_OperatingSystem).Caption
+if ($OSCaption -match 'Server') {
+    Write-Error "This script targets per-user resources and cannot run reliably on Windows Server ($OSCaption). NinjaOne's 'logged-in user' context on RDP servers may execute against the wrong user session. If you have verified the target user, remove this guard."
     exit 1
 }
 

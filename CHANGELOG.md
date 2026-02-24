@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-02-24
+
+### Added
+- Windows Server (RDP) guard for user-context scripts — NinjaOne's "run as logged-in user" cannot target a specific RDP session on multi-session servers, so user-centric automations now block execution on Windows Server by default.
+
 ## [1.2.0] - 2026-02-13
 
 ### Fixed

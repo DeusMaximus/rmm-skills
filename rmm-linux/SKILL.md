@@ -3,7 +3,7 @@ name: rmm-linux-scripts
 description: Create and review bash scripts specifically for NinjaOne or Action1 RMM deployment to Linux servers. ONLY use when the user explicitly mentions RMM, NinjaOne, Action1, or background agent deployment targeting Linux. Do NOT use for general shell scripting.
 metadata:
   author: DeusMaximus and Claude
-  version: "1.2.0"
+  version: "1.2.1"
 ---
 
 # RMM Linux Shell Script Expert

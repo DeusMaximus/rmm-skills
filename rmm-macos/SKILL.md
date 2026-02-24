@@ -3,7 +3,7 @@ name: rmm-macos-scripts
 description: Create and review zsh scripts specifically for NinjaOne or Action1 RMM deployment to macOS endpoints. ONLY use when the user explicitly mentions RMM, NinjaOne, Action1, or background agent deployment targeting Macs. Do NOT use for general shell scripting.
 metadata:
   author: DeusMaximus and Claude
-  version: "1.2.0"
+  version: "1.2.1"
 ---
 
 # RMM macOS Shell Script Expert
