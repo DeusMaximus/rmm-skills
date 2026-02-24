@@ -52,10 +52,9 @@ Each platform folder is self-contained and distributed as a zip for Claude Deskt
 
 Every release ships **all three zips** regardless of which skills changed — users can grab any single zip from any release and have the latest.
 
-1. Run `bash scripts/check-release.sh` to verify versions match and conventions are in sync.
-2. Bump version in all three `SKILL.md` frontmatter blocks.
-3. Add a new entry to `CHANGELOG.md`.
-4. Run `bash release.sh` to build zips — this runs sanity checks automatically, then packages `rmm-powershell.zip`, `rmm-macos.zip`, `rmm-linux.zip`.
+1. Bump version in all three `SKILL.md` frontmatter blocks.
+2. Add a new entry to `CHANGELOG.md`.
+3. Run `bash release.sh` to build zips — this runs sanity checks automatically, then packages `rmm-powershell.zip`, `rmm-macos.zip`, `rmm-linux.zip`.
 5. Zips are gitignored — rebuild from source each release.
 6. Create a GitHub release with `gh release create vX.Y.Z *.zip` and attach the zips.
 
