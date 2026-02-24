@@ -15,6 +15,7 @@ rmm-skills/
 ├── .gitignore
 ├── .github/
 │   └── pull_request_template.md  # PR checklist for contributors
+├── release.sh             # Build release zips (runs sanity checks first)
 ├── scripts/
 │   └── check-release.sh   # Pre-release sanity check (version + conventions sync)
 ├── rmm-powershell/
@@ -54,11 +55,9 @@ Every release ships **all three zips** regardless of which skills changed — us
 1. Run `bash scripts/check-release.sh` to verify versions match and conventions are in sync.
 2. Bump version in all three `SKILL.md` frontmatter blocks.
 3. Add a new entry to `CHANGELOG.md`.
-4. Build zips: `rmm-powershell.zip`, `rmm-macos.zip`, `rmm-linux.zip` — each containing the skill folder with `SKILL.md` and `RMM-CONVENTIONS.md`.
+4. Run `bash release.sh` to build zips — this runs sanity checks automatically, then packages `rmm-powershell.zip`, `rmm-macos.zip`, `rmm-linux.zip`.
 5. Zips are gitignored — rebuild from source each release.
-6. Create a GitHub release with `gh release create vX.Y.Z` and upload assets with `gh release upload vX.Y.Z *.zip --clobber`.
-
-There is no automated build script yet — zips are built manually or by asking Claude to do it.
+6. Create a GitHub release with `gh release create vX.Y.Z *.zip` and attach the zips.
 
 ## Known Quirks
 
