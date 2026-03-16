@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-03-16
+
+### Added
+- PowerShell skill: document NinjaOne checkbox custom field behaviour — without `-Type 'Checkbox'`, `Get-NinjaProperty` returns `0`/`1` instead of `$true`/`$false`.
+
 ## [1.2.1] - 2026-02-24
 
 ### Added

@@ -3,7 +3,7 @@ name: rmm-powershell-scripts
 description: Create and review PowerShell 5.1 scripts specifically for NinjaOne or Action1 RMM deployment. ONLY use when the user explicitly mentions RMM, NinjaOne, Action1, or background agent deployment. Do NOT use for general PowerShell scripting.
 metadata:
   author: DeusMaximus and Claude
-  version: "1.2.1"
+  version: "1.2.2"
 ---
 
 # RMM PowerShell Script Expert
@@ -351,6 +351,7 @@ Ninja-Property-Docs-Options-Single "templateName" "fieldName"
 - Secure fields are only accessible during **automation execution** (not from web/local terminal)
 - Secure fields are limited to **200 characters**
 - Dropdown/MultiSelect without `-Type` returns **GUIDs**, not friendly names
+- Checkbox without `-Type` returns `0` (false) or `1` (true) — use `-Type 'Checkbox'` to get a proper boolean (`$true` / `$false`)
 - Timestamps use **Unix epoch seconds** or **ISO format** (yyyy-MM-ddTHH:mm:ss without timezone)
 - Use `--direct-out` flag on ninjarmm-cli.exe if storing output in a variable (trades Unicode support for reliable stdout capture)
 
