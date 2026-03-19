@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-03-20
+
+### Added
+- NinjaOne WYSIWYG Field Reference (`NINJAONE-WYSIWYG-REFERENCE.md`) — complete reference for allowed HTML elements, inline CSS properties, NinjaOne CSS classes, Font Awesome 6 icons, Charts.css, and Bootstrap 5 grid layout in WYSIWYG custom fields.
+- NinjaOne agent environment variables (`$env:NINJA_*`) reference table with platform access syntax and best practices.
+- NinjaOne device tag operations — PowerShell cmdlets (`Get-NinjaTag`, `Set-NinjaTag`, `Remove-NinjaTag`) and CLI commands (`tag-get`, `tag-set`, `tag-clear`).
+- Common mistakes sections — cross-platform (RMM-CONVENTIONS.md) and PowerShell-specific (SKILL.md) covering checkbox comparisons, empty string handling, WYSIWYG gotchas, `ConvertTo-Json` depth, DateTime parsing, and more.
+- PowerShell skill: WYSIWYG quick example and device tags section.
+
+### Changed
+- Moved checkbox custom field behaviour note from PowerShell SKILL.md inline list to the cross-platform common mistakes section in RMM-CONVENTIONS.md.
+
 ## [1.2.2] - 2026-03-16
 
 ### Added
