@@ -3,7 +3,7 @@ name: rmm-linux-scripts
 description: Create and review bash scripts specifically for NinjaOne or Action1 RMM deployment to Linux servers. ONLY use when the user explicitly mentions RMM, NinjaOne, Action1, or background agent deployment targeting Linux. Do NOT use for general shell scripting.
 metadata:
   author: DeusMaximus and Claude
-  version: "1.2.2"
+  version: "1.3.0"
 ---
 
 # RMM Linux Shell Script Expert
@@ -364,3 +364,27 @@ else
     log_info "nginx started and enabled."
 fi
 ```
+
+## NinjaOne WYSIWYG Fields (Linux)
+
+When writing HTML content to WYSIWYG custom fields via `ninjarmm-cli set fieldName "$html"` or piped with `echo "$html" | ./ninjarmm-cli set --stdin fieldName`, NinjaOne applies an HTML sanitiser that only allows specific elements and CSS properties. See `NINJAONE-WYSIWYG-REFERENCE.md` in this skill directory for the complete reference covering allowed HTML elements, allowed inline CSS properties, NinjaOne CSS classes, Font Awesome 6 icons, Charts.css data visualisation, and Bootstrap 5 grid layout.
+
+**Key limits:** WYSIWYG fields support a maximum of 200,000 characters. Fields exceeding 10,000 characters auto-collapse. Maximum 20 WYSIWYG fields per form/template. For large content, pipe via CLI with `--stdin`.
+
+## NinjaOne Device Tags (Linux)
+
+For tag operations via CLI on Linux, see the "NinjaOne Device Tags" section in `RMM-CONVENTIONS.md`. Use `./ninjarmm-cli tag-get`, `./ninjarmm-cli tag-set "TagName"`, and `./ninjarmm-cli tag-clear "TagName"`. Tags require root context and must be pre-created in the NinjaOne web interface.
+
+## Common Mistakes (Linux / bash)
+
+In addition to the cross-platform common mistakes in `RMM-CONVENTIONS.md`, these are Linux-specific issues:
+
+1. **Missing `./` prefix when calling `ninjarmm-cli`** — On Linux, bare `ninjarmm-cli` won't resolve because the agent's `programdata` directory isn't in `$PATH`. Always use `./ninjarmm-cli` from the directory, or the full path `/opt/NinjaRMMAgent/programdata/ninjarmm-cli`, or `"$NINJA_DATA_PATH/ninjarmm-cli"`.
+
+2. **Unquoted variable expansions** — `$variable` without double quotes causes word splitting and glob expansion. This is especially dangerous in paths with spaces or filenames from user input. Always use `"$variable"`.
+
+3. **Using `$0` for script name** — NinjaOne copies scripts to a temporary path before execution, so `$0` resolves to a generated filename like `/tmp/ninjaAgentCurrentScript_0.sh`. Combined with `set -u`, this can crash the script. Always hardcode `readonly SCRIPT_NAME="descriptive-name"`.
+
+4. **Assuming Debian/Ubuntu commands on RHEL** — `apt-get`, `dpkg`, `ufw` don't exist on RHEL/CentOS/Alma. Use `dnf`/`yum`, `rpm`, `firewall-cmd` respectively. When the target distro is unknown, detect via `/etc/os-release` or ask the user.
+
+5. **Missing `${varName:-}` with `set -u`** — When checking if a NinjaOne script variable is empty, referencing an unset variable with `set -u` active causes an immediate error. Use `[[ -z "${varName:-}" ]]` to safely check without triggering the unset variable trap.

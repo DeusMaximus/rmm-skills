@@ -3,7 +3,7 @@ name: rmm-powershell-scripts
 description: Create and review PowerShell 5.1 scripts specifically for NinjaOne or Action1 RMM deployment. ONLY use when the user explicitly mentions RMM, NinjaOne, Action1, or background agent deployment. Do NOT use for general PowerShell scripting.
 metadata:
   author: DeusMaximus and Claude
-  version: "1.2.2"
+  version: "1.3.0"
 ---
 
 # RMM PowerShell Script Expert
@@ -351,7 +351,6 @@ Ninja-Property-Docs-Options-Single "templateName" "fieldName"
 - Secure fields are only accessible during **automation execution** (not from web/local terminal)
 - Secure fields are limited to **200 characters**
 - Dropdown/MultiSelect without `-Type` returns **GUIDs**, not friendly names
-- Checkbox without `-Type` returns `0` (false) or `1` (true) — use `-Type 'Checkbox'` to get a proper boolean (`$true` / `$false`)
 - Timestamps use **Unix epoch seconds** or **ISO format** (yyyy-MM-ddTHH:mm:ss without timezone)
 - Use `--direct-out` flag on ninjarmm-cli.exe if storing output in a variable (trades Unicode support for reliable stdout capture)
 
@@ -370,6 +369,32 @@ Action1-Set-CustomAttribute 'DriveSpaceStatus' $(
 ```
 
 There is no `Action1-Get-CustomAttribute` — reading is done via the Action1 console or API only.
+
+## NinjaOne WYSIWYG Fields (PowerShell)
+
+When writing HTML content to WYSIWYG custom fields via `Set-NinjaProperty -Type 'WYSIWYG'`, NinjaOne applies an HTML sanitiser that only allows specific elements and CSS properties. See `NINJAONE-WYSIWYG-REFERENCE.md` in this skill directory for the complete reference covering allowed HTML elements, allowed inline CSS properties, NinjaOne CSS classes (cards, info-cards, stat-cards, tables with status rows, buttons, tags), Font Awesome 6 icons, Charts.css data visualisation, and Bootstrap 5 grid layout.
+
+**Key limits:** WYSIWYG fields support a maximum of 200,000 characters. Fields exceeding 10,000 characters auto-collapse in the NinjaOne UI. Maximum 20 WYSIWYG fields per form/template. For content over 10,000 characters, use `Ninja-Property-Set-Piped` via CLI.
+
+**Quick example:**
+```powershell
+$Html = @"
+<div class="card flex-grow-1">
+  <div class="card-title-box">
+    <div class="card-title"><i class="fas fa-server"></i>&nbsp;&nbsp;Status</div>
+  </div>
+  <div class="card-body">
+    <p><b>Computer:</b> $($env:COMPUTERNAME)</p>
+    <p><b>Last Check:</b> $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')</p>
+  </div>
+</div>
+"@
+Set-NinjaProperty -Name 'StatusReport' -Value $Html -Type 'WYSIWYG'
+```
+
+## NinjaOne Device Tags (PowerShell)
+
+For tag operations using the NinjaOne PowerShell module, see the "NinjaOne Device Tags" section in `RMM-CONVENTIONS.md`. The PowerShell cmdlets are `Get-NinjaTag`, `Set-NinjaTag -Name 'TagName'`, and `Remove-NinjaTag -Name 'TagName'`. Tags require SYSTEM context and must be pre-created in the NinjaOne web interface.
 
 ## Examples of Good vs Bad Patterns
 
@@ -402,3 +427,21 @@ catch {
     exit 1
 }
 ```
+
+## Common Mistakes (PowerShell / Windows)
+
+In addition to the cross-platform common mistakes in `RMM-CONVENTIONS.md`, these are PowerShell-specific issues:
+
+1. **Using PS 6.0+ syntax in RMM scripts** — Ternary `? :`, null-coalescing `??`, null-conditional `?.`, pipeline chain `&&`/`||`, and `ForEach-Object -Parallel` do not exist in PowerShell 5.1. NinjaOne endpoints run PS 5.1. See the "FORBIDDEN" list above.
+
+2. **Using aliases instead of full cmdlet names** — `?` (`Where-Object`), `%` (`ForEach-Object`), `select` (`Select-Object`), `gci` (`Get-ChildItem`), `rm` (`Remove-Item`) are less readable in RMM script output and break if alias definitions differ. Always use full names.
+
+3. **Broken here-string delimiters** — The closing `"@` of a here-string must be at the **start of a line** with no leading spaces or trailing characters. Indenting `"@` inside a function or if-block causes a parse error. This is a frequent issue in WYSIWYG HTML generation where large HTML blocks are defined in here-strings.
+
+4. **`Invoke-WebRequest` without `-UseBasicParsing`** — On systems where Internet Explorer has never been launched, `Invoke-WebRequest` fails without `-UseBasicParsing` because it tries to use the IE DOM parser. Always include it, or prefer `Invoke-RestMethod` / `System.Net.WebClient` for RMM scripts.
+
+5. **Writing to WYSIWYG fields with unsupported HTML/CSS** — Elements like `<img>`, `<script>`, `<style>`, `<iframe>` are silently stripped. CSS properties like `flex-wrap`, `gap`, `overflow`, `position` are stripped silently. Inline styles on `<code>` and `<pre>` elements don't work — wrap in `<div>` or `<span>` instead. See `NINJAONE-WYSIWYG-REFERENCE.md`.
+
+6. **Running user-context scripts on Windows Server (RDP)** — NinjaOne's "run as logged-in user" on RDP servers picks an arbitrary session. The script may run against the wrong user. Always include a Server OS guard (see the Logged-in User template above) unless the user explicitly requests otherwise.
+
+7. **Forgetting context validation** — Scripts that need SYSTEM access (custom fields, service management, HKLM registry) should validate they're running as SYSTEM at the top. Scripts that need user context (mapped drives, HKCU, Credential Manager) should validate they're NOT running as SYSTEM. Without validation, misconfigured execution context causes silent failures.

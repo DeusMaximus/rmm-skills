@@ -121,6 +121,95 @@ NinjaOne also supports passing inputs via **defined parameters** (traditional sc
 - You **cannot** mark individual defined parameters as mandatory or optional in the NinjaOne UI — that must be handled by the script itself
 - Environment variables and defined parameters can coexist, but environment variables are the preferred approach for new scripts
 
+## NinjaOne Agent Environment Variables (`$env:NINJA_*`)
+
+The NinjaOne agent injects these environment variables on every platform (Windows, macOS, Linux). They are available in all script types (PowerShell, Batch, Shell, VBScript) and require a **device reboot** to refresh if values change.
+
+| Variable | Description | Common Use |
+|---|---|---|
+| `NINJA_ORGANIZATION_NAME` | Organisation name | Multi-tenant logging, conditional logic |
+| `NINJA_ORGANIZATION_ID` | Organisation ID (integer) | API calls, filtering |
+| `NINJA_COMPANY_NAME` | Company name | May differ from org name |
+| `NINJA_LOCATION_NAME` | Location name | Site-specific logic |
+| `NINJA_LOCATION_ID` | Location ID (integer) | API calls, filtering |
+| `NINJA_AGENT_NODE_ID` | Node ID on NinjaOne server | API device identification |
+| `NINJA_AGENT_MACHINE_ID` | Machine ID on NinjaOne server | Unique device identifier |
+| `NINJA_DATA_PATH` | Agent data folder (scripts, logs, downloads) | Locating `ninjarmm-cli` on Linux/macOS |
+| `NINJA_EXECUTING_PATH` | Agent install directory | Referencing agent binaries |
+| `NINJA_AGENT_VERSION_INSTALLED` | Installed agent version | Version-gated feature checks |
+| `NINJA_PATCHER_VERSION_INSTALLED` | Installed patcher version | Patcher compatibility checks |
+| `NINJA_AGENT_PASSWORD` | Agent password for session key auth | **NEVER log in plain text** |
+
+### Platform Access Syntax
+
+| Platform | Syntax | Example |
+|---|---|---|
+| PowerShell | `$env:VARIABLE_NAME` | `$env:NINJA_ORGANIZATION_NAME` |
+| Batch | `%VARIABLE_NAME%` | `%NINJA_ORGANIZATION_NAME%` |
+| bash / zsh | `$VARIABLE_NAME` | `$NINJA_ORGANIZATION_NAME` |
+
+### Best Practices
+
+- Always include `NINJA_ORGANIZATION_NAME` in log output for multi-tenant environments — this is essential when debugging scripts across 60+ client tenants
+- Use `NINJA_DATA_PATH` to locate the `ninjarmm-cli` binary portably (especially on Linux/macOS where the path differs)
+- Use `NINJA_AGENT_NODE_ID` when making API calls that target the current device
+- Never log or output `NINJA_AGENT_PASSWORD` — use it only where session key auth is required
+- These variables are only available when running via the NinjaOne agent — they won't exist in manual terminal sessions or non-NinjaOne RMM platforms
+
+## NinjaOne Device Tags
+
+NinjaOne tags classify devices beyond roles and custom fields. Tags enable device searches, automation conditions, and filtered queries.
+
+**Important constraints:**
+- Tag operations **only work within automation scripts** running on the NinjaOne agent — not in manual terminal sessions
+- Tags must be **pre-created in the NinjaOne web interface** before scripts can assign them
+- Scripts cannot create new tag definitions — only assign/remove existing ones
+- Tag names are **case-sensitive**
+
+### PowerShell Module Cmdlets (Windows)
+
+```powershell
+# Get all tags on current device (returns string array)
+$Tags = Get-NinjaTag
+
+# Assign a tag (throws if tag name doesn't exist in org)
+Set-NinjaTag -Name 'Production'
+
+# Remove a tag (throws if tag name doesn't exist in org)
+Remove-NinjaTag -Name 'Development'
+
+# Conditional pattern — check before acting
+$Tags = Get-NinjaTag
+if ($Tags -contains 'Maintenance Approved') {
+    # ... do maintenance work ...
+    Remove-NinjaTag -Name 'Maintenance Approved'
+    Set-NinjaTag -Name 'Maintenance Completed'
+}
+```
+
+### CLI Commands (All Platforms)
+
+```bash
+# Get all tags (one per line)
+ninjarmm-cli tag-get
+
+# Assign a tag
+ninjarmm-cli tag-set "Production"
+
+# Remove a tag
+ninjarmm-cli tag-clear "Development"
+```
+
+On Linux, prefix with `./` or use full path. On macOS, use `/Applications/NinjaRMMAgent/programdata/ninjarmm-cli`.
+
+### Tag Best Practices
+
+- Always wrap tag operations in try/catch (PowerShell) or check exit codes (bash/zsh)
+- Check current tags with `Get-NinjaTag` / `tag-get` before adding to avoid redundant operations
+- Remove temporary tags (e.g., "Maintenance Approved") after the automation completes
+- Prefer PowerShell cmdlets over CLI on Windows for better error handling and type safety
+- Tag operations require SYSTEM/root context (same as custom fields)
+
 ## Security Requirements
 
 - **NEVER** store plain-text credentials in scripts
@@ -236,3 +325,27 @@ For every request, provide:
 For cross-platform translation requests, add:
 
 3. **Cross-Platform Translation Notes** — Explain conceptual differences between platforms, mapping commands and approaches, with special attention to privilege differences
+
+## Common Mistakes (Cross-Platform)
+
+These are recurring errors that affect scripts across all platforms when deployed via NinjaOne/Action1.
+
+1. **Checkbox comparison against the wrong value** — Checkbox script variables send `"true"` or `"false"` as strings, not booleans. In PowerShell, `if ($env:EnableFeature)` is always `$true` for any non-empty string. Use `$env:EnableFeature -eq 'true'` instead. In bash/zsh, use `[[ "$enableFeature" == "true" ]]`.
+
+2. **Not handling empty strings for non-mandatory variables** — Non-mandatory NinjaOne script variables arrive as empty strings `""`, not `$null`. Direct type casts like `[int]$env:Port` throw on empty strings. Always guard with `[string]::IsNullOrWhiteSpace()` (PowerShell) or `[[ -z "${varName:-}" ]]` (bash/zsh) before converting.
+
+3. **Naming conflicts with system environment variables** — If a NinjaOne script variable shares a name with an existing system environment variable (e.g., `PATH`, `TEMP`, `HOME`), the script will fail or use the wrong value. Prefix custom variables to avoid collisions.
+
+4. **Assuming custom fields work in user context** — `ninjarmm-cli`, `Get-NinjaProperty`, and `Set-NinjaProperty` only function under SYSTEM (Windows) or root (Linux/macOS). They silently fail or error when run as the logged-in user. If you need user-context data in a custom field, run as SYSTEM and use a "run as user" technique to gather the data.
+
+5. **Dropdown/MultiSelect returning GUIDs instead of friendly names** — Without the `-Type` parameter on `Get-NinjaProperty` / `Set-NinjaProperty`, dropdown and multi-select fields return raw GUIDs. Always specify `-Type 'Dropdown'` or `-Type 'MultiSelect'` for human-readable values. On Linux/macOS (CLI only), use `ninjarmm-cli options fieldName` to map GUIDs to names.
+
+6. **Forgetting `-Depth` on `ConvertTo-Json`** — PowerShell's `ConvertTo-Json` defaults to depth 2. Nested objects (e.g., API request bodies with sub-objects) are silently truncated to `"System.Collections.Hashtable"`. Use `-Depth 10` for complex structures.
+
+7. **Using `$0` or `$(basename "$0")` for script name on NinjaOne** — NinjaOne copies scripts to a temporary path before execution, so `$0` resolves to a meaningless generated filename. Combined with `set -u` (bash/zsh), an empty `$0` can crash the script immediately. Always hardcode `SCRIPT_NAME` to a descriptive constant.
+
+8. **DateTime parsing without timezone handling** — NinjaOne Date/Time script variables use ISO 8601 with timezone offsets (e.g., `2024-01-15T00:00:00.000+00:00`). Parsing with `[DateTime]::Parse($value)` without `DateTimeStyles.RoundtripKind` loses timezone info and can shift the time. Use `[DateTime]::Parse($value, $null, [System.Globalization.DateTimeStyles]::RoundtripKind)`.
+
+9. **Special characters in script variable names or values** — NinjaOne does not support these characters in script variables: `Å Ä Ö & | ; $ > < \` !`. Scripts using them fail at runtime without a clear error.
+
+10. **Exceeding character limits on custom fields** — Text fields: 200 chars. MultiLine: 10,000 chars. Secure: 200–10,000 chars (configurable). WYSIWYG: 200,000 chars. WYSIWYG fields auto-collapse above 10,000 chars. Writes exceeding limits are silently truncated or rejected.

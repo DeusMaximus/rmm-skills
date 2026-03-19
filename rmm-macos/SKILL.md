@@ -3,7 +3,7 @@ name: rmm-macos-scripts
 description: Create and review zsh scripts specifically for NinjaOne or Action1 RMM deployment to macOS endpoints. ONLY use when the user explicitly mentions RMM, NinjaOne, Action1, or background agent deployment targeting Macs. Do NOT use for general shell scripting.
 metadata:
   author: DeusMaximus and Claude
-  version: "1.2.2"
+  version: "1.3.0"
 ---
 
 # RMM macOS Shell Script Expert
@@ -291,3 +291,27 @@ else
     log_info "Screen saver password enabled successfully."
 fi
 ```
+
+## NinjaOne WYSIWYG Fields (macOS)
+
+When writing HTML content to WYSIWYG custom fields via `ninjarmm-cli set fieldName "$html"` or piped with `echo "$html" | ninjarmm-cli set --stdin fieldName`, NinjaOne applies an HTML sanitiser that only allows specific elements and CSS properties. See `NINJAONE-WYSIWYG-REFERENCE.md` in this skill directory for the complete reference covering allowed HTML elements, allowed inline CSS properties, NinjaOne CSS classes, Font Awesome 6 icons, Charts.css data visualisation, and Bootstrap 5 grid layout.
+
+**Key limits:** WYSIWYG fields support a maximum of 200,000 characters. Fields exceeding 10,000 characters auto-collapse. Maximum 20 WYSIWYG fields per form/template. For large content, pipe via CLI with `--stdin`.
+
+## NinjaOne Device Tags (macOS)
+
+For tag operations via CLI on macOS, see the "NinjaOne Device Tags" section in `RMM-CONVENTIONS.md`. Use `ninjarmm-cli tag-get`, `ninjarmm-cli tag-set "TagName"`, and `ninjarmm-cli tag-clear "TagName"` (full path: `/Applications/NinjaRMMAgent/programdata/ninjarmm-cli`). Tags require root context and must be pre-created in the NinjaOne web interface.
+
+## Common Mistakes (macOS / zsh)
+
+In addition to the cross-platform common mistakes in `RMM-CONVENTIONS.md`, these are macOS-specific issues:
+
+1. **Assuming root context** — macOS NinjaOne scripts default to the **logged-in user**, not root. This is the opposite of Windows/Linux. `sudo` will fail non-interactively. If the script needs root (installing software, modifying system-level `defaults`, flushing DNS), it must be explicitly configured as root in NinjaOne.
+
+2. **Using `sudo` in user-context scripts** — `sudo` requires interactive password input, which isn't available in RMM headless execution. It will hang or fail silently. If root is needed, change the execution context in NinjaOne rather than using `sudo`.
+
+3. **Using `${0:t}` or `$0` for script name** — NinjaOne copies scripts to a temp path (e.g., `/private/var/folders/.../ninjaAgentCurrentScript_0.sh`), so `$0` resolves to a meaningless name. Combined with `set -u`, this crashes the script. Always hardcode `readonly SCRIPT_NAME="descriptive-name"`.
+
+4. **Relying on Homebrew** — `brew` is user-installed and may not be present on managed Macs, especially in enterprise environments. Use built-in macOS CLI tools (`defaults`, `plutil`, `pmset`, `softwareupdate`, `system_profiler`, `launchctl`, `diskutil`) unless the user explicitly confirms Homebrew availability.
+
+5. **Custom fields in user context** — `ninjarmm-cli` only works under root. Since macOS defaults to user context, custom field reads/writes will silently fail unless the script is explicitly set to run as root in NinjaOne. If you need user data in a custom field, run as root and use `su - username -c "command"` or `launchctl asuser` to gather the user-context data.
