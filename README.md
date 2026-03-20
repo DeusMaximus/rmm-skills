@@ -20,11 +20,13 @@ Each skill includes:
 
 - **Scope boundaries** — Only activates when you mention RMM, NinjaOne, Action1, or endpoint deployment. Won't interfere with general scripting.
 - **NinjaOne custom field reference** — PowerShell module commands (Windows) and `ninjarmm-cli` syntax (macOS/Linux) for reading and writing custom fields and documentation fields.
+- **NinjaOne WYSIWYG field reference** — Complete reference (`NINJAONE-WYSIWYG-REFERENCE.md`) for allowed HTML elements, inline CSS properties, NinjaOne CSS classes, Font Awesome 6 icons, Charts.css, and Bootstrap 5 grid layout in WYSIWYG custom fields.
 - **Action1 custom attribute reference** — `Action1-Set-CustomAttribute` syntax and known limitations.
 - **Cross-platform translation** — Maps concepts between platforms when converting scripts (e.g., `Ninja-Property-Get` ↔ `ninjarmm-cli get`, privilege context differences).
 - **Code review mode** — Provide an existing script and get expert analysis for RMM compliance, security, and best practices.
+- **Common mistakes** — Cross-platform and platform-specific gotchas covering checkbox comparisons, empty string handling, WYSIWYG pitfalls, `ConvertTo-Json` depth, DateTime parsing, and more.
 
-All three skills share `RMM-CONVENTIONS.md` which covers non-interactive execution, security, idempotency, logging, and RMM data storage concepts.
+All three skills share `RMM-CONVENTIONS.md` (non-interactive execution, security, idempotency, logging, NinjaOne agent environment variables, device tags, and common mistakes) and `NINJAONE-WYSIWYG-REFERENCE.md` (WYSIWYG field styling reference).
 
 ## Installation
 
@@ -65,14 +67,17 @@ rmm-skills/
 ├── README.md
 ├── LICENSE
 ├── rmm-powershell/
-│   ├── SKILL.md          # PowerShell 5.1 skill definition
-│   └── RMM-CONVENTIONS.md  # Shared conventions
+│   ├── SKILL.md                       # PowerShell 5.1 skill definition
+│   ├── RMM-CONVENTIONS.md             # Shared conventions
+│   └── NINJAONE-WYSIWYG-REFERENCE.md  # WYSIWYG field styling reference
 ├── rmm-macos/
-│   ├── SKILL.md          # macOS zsh skill definition
-│   └── RMM-CONVENTIONS.md  # Shared conventions
+│   ├── SKILL.md                       # macOS zsh skill definition
+│   ├── RMM-CONVENTIONS.md             # Shared conventions
+│   └── NINJAONE-WYSIWYG-REFERENCE.md  # WYSIWYG field styling reference
 └── rmm-linux/
-    ├── SKILL.md          # Linux bash skill definition
-    └── RMM-CONVENTIONS.md  # Shared conventions
+    ├── SKILL.md                       # Linux bash skill definition
+    ├── RMM-CONVENTIONS.md             # Shared conventions
+    └── NINJAONE-WYSIWYG-REFERENCE.md  # WYSIWYG field styling reference
 ```
 
 ## Usage Examples
@@ -93,7 +98,7 @@ The skill activates automatically based on keywords like "RMM", "NinjaOne", "Act
 
 ### Fully Documented
 
-- **NinjaOne** — Custom fields (PowerShell module + CLI), documentation fields, secure fields, all field types
+- **NinjaOne** — Custom fields (PowerShell module + CLI), documentation fields, secure fields, all field types, WYSIWYG field styling, device tags, agent environment variables
 - **Action1** — Custom attributes, `[CmdletBinding()]` incompatibility noted, Windows-only scripting
 
 ### Compatible (Generic RMM Patterns)
