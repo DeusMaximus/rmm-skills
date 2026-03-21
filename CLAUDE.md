@@ -19,19 +19,24 @@ rmm-skills/
 ├── scripts/
 │   └── check-release.sh   # Pre-release sanity check (version + conventions sync)
 ├── rmm-powershell/
-│   ├── SKILL.md           # PowerShell 5.1 skill (Windows)
-│   └── RMM-CONVENTIONS.md # Shared conventions (copied into each skill folder)
+│   ├── SKILL.md                       # PowerShell 5.1 skill (Windows)
+│   ├── RMM-CONVENTIONS.md             # Shared conventions (copied into each skill folder)
+│   └── NINJAONE-WYSIWYG-REFERENCE.md  # NinjaOne WYSIWYG field HTML/CSS reference
 ├── rmm-macos/
-│   ├── SKILL.md           # zsh skill (macOS Catalina 10.15+)
-│   └── RMM-CONVENTIONS.md
+│   ├── SKILL.md                       # zsh skill (macOS Catalina 10.15+)
+│   ├── RMM-CONVENTIONS.md
+│   └── NINJAONE-WYSIWYG-REFERENCE.md
 └── rmm-linux/
-    ├── SKILL.md           # bash 4.x+ skill (Linux)
-    └── RMM-CONVENTIONS.md
+    ├── SKILL.md                       # bash 4.x+ skill (Linux)
+    ├── RMM-CONVENTIONS.md
+    └── NINJAONE-WYSIWYG-REFERENCE.md
 ```
 
 Each platform folder is self-contained and distributed as a zip for Claude Desktop, or copied into `~/.claude/skills/` for Claude Code.
 
 `RMM-CONVENTIONS.md` is **identical** across all three folders — it covers non-interactive execution, security, idempotency, logging, exit codes, input validation, code review mode, and response structure. **`rmm-powershell/RMM-CONVENTIONS.md` is the canonical copy** — edit that one first, then copy to the other two folders.
+
+`NINJAONE-WYSIWYG-REFERENCE.md` is also **identical** across all three folders. Keep all three copies in sync when updating it.
 
 ## Key Conventions
 
@@ -64,6 +69,7 @@ Every release ships **all three zips** regardless of which skills changed — us
 - **Action1 + `[CmdletBinding()]`:** Action1 does not support `[CmdletBinding()]` or `param()` blocks. The PowerShell skill has a separate Action1 template.
 - **NinjaOne custom fields require SYSTEM/root:** Custom field access (read and write) does not work in user context on any platform.
 - **Skill name vs directory mismatch:** The `name` field in SKILL.md frontmatter (e.g., `rmm-powershell-scripts`) doesn't match the directory name (`rmm-powershell`) or zip filename (`rmm-powershell.zip`). This works fine currently — Claude doesn't enforce a match — but may need fixing if the SKILL.md manifest becomes stricter in future.
+- **`ninjarmm-cli` not in PATH on Linux:** Bare `ninjarmm-cli` won't resolve. Use `./ninjarmm-cli`, the full path `/opt/NinjaRMMAgent/programdata/ninjarmm-cli`, or `"$NINJA_DATA_PATH/ninjarmm-cli"`.
 
 ## Development Workflow
 
