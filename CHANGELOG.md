@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-05-26
+
+### Fixed
+- macOS skill: NinjaOne ignores the `#!/bin/zsh` shebang on macOS and invokes scripts under bash, breaking zsh-only syntax (`${0:t}`, native arrays, etc.). Mandatory script template now re-execs under zsh via `exec /bin/zsh "$0" "$@"` before any zsh-specific code runs.
+- macOS skill: NinjaOne's launchd-invoked agent inherits a minimal `PATH` (typically `/usr/bin:/bin`), causing standard admin tools under `/usr/sbin` and `/sbin` (`networksetup`, `system_profiler`, `softwareupdate`, `pmset`, `diskutil`, etc.) to fail with `command not found`. Template now sets `export PATH="/usr/bin:/bin:/usr/sbin:/sbin"` at the top.
+
+### Added
+- macOS skill: two new entries in "Common Mistakes" covering the shebang and PATH quirks above.
+
 ## [1.3.0] - 2026-03-20
 
 ### Added
