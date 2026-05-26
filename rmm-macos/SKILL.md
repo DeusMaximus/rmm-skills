@@ -3,7 +3,7 @@ name: rmm-macos-scripts
 description: Create and review zsh scripts specifically for NinjaOne or Action1 RMM deployment to macOS endpoints. ONLY use when the user explicitly mentions RMM, NinjaOne, Action1, or background agent deployment targeting Macs. Do NOT use for general shell scripting.
 metadata:
   author: DeusMaximus and Claude
-  version: "1.3.0"
+  version: "1.4.0"
 ---
 
 # RMM macOS Shell Script Expert
@@ -91,6 +91,18 @@ fi
 # Context:     Runs as [current user / root] via RMM (NinjaOne/Action1)
 # ==============================================================================
 
+# NinjaOne ignores the shebang on macOS and invokes scripts under bash.
+# Re-exec under zsh to guarantee zsh-only syntax (e.g., ${var:t}, =~ regex
+# without bash quirks, native arrays) behaves as written.
+if [ -z "${ZSH_VERSION:-}" ]; then
+    exec /bin/zsh "$0" "$@"
+fi
+
+# NinjaOne's launchd-invoked agent runs with a minimal PATH, so common
+# utilities (e.g., /usr/sbin/networksetup, /usr/sbin/system_profiler,
+# /usr/sbin/softwareupdate) may not resolve. Set the standard system PATH.
+export PATH="/usr/bin:/bin:/usr/sbin:/sbin"
+
 set -euo pipefail
 
 # --- Configuration -----------------------------------------------------------
@@ -111,6 +123,10 @@ log_error() {
 ```
 
 > **NinjaOne caveat:** Do NOT use `${0:t}` or any `$0`-derived value for `SCRIPT_NAME`. NinjaOne copies scripts to a temporary path (e.g., `/private/var/folders/.../ninjaAgentCurrentScript_0.sh`) before execution, so `$0` will always resolve to a meaningless generated filename. Combined with `set -u`, an unset or empty `$0` will crash the script immediately. Always hardcode `SCRIPT_NAME` to the actual script name.
+
+> **NinjaOne caveat — shebang is ignored on macOS:** Despite `#!/bin/zsh`, NinjaOne's macOS agent executes scripts under **bash**. Any zsh-only syntax (e.g., `${0:t}`, `${(L)var}`, `${array[1,3]}` slicing, `=~` with PCRE-style quirks, native zsh associative array syntax) will silently misbehave or error under bash. The `exec /bin/zsh "$0" "$@"` guard at the top of the template re-launches the script under zsh so the rest of the file runs as written. Place it **before** `set -euo pipefail` so the re-exec itself is not affected by strict mode.
+
+> **NinjaOne caveat — minimal PATH:** The NinjaOne agent is launched by `launchd` and inherits a stripped-down `PATH` (often just `/usr/bin:/bin`). Tools under `/usr/sbin` and `/sbin` (e.g., `networksetup`, `system_profiler`, `softwareupdate`, `pmset`, `diskutil`, `ifconfig`) will not resolve by bare name and the script will fail with `command not found`. Always set `export PATH="/usr/bin:/bin:/usr/sbin:/sbin"` at the top of the script (or call these binaries by full path).
 
 ### Error Handling
 
@@ -273,6 +289,15 @@ pmset -a displaysleep 10
 ### Good: Proper quoting, error handling, user context awareness
 ```zsh
 #!/bin/zsh
+
+# NinjaOne ignores the shebang on macOS — re-exec under zsh.
+if [ -z "${ZSH_VERSION:-}" ]; then
+    exec /bin/zsh "$0" "$@"
+fi
+
+# NinjaOne's launchd-invoked agent has a minimal PATH.
+export PATH="/usr/bin:/bin:/usr/sbin:/sbin"
+
 set -euo pipefail
 
 readonly SCRIPT_NAME="enable-screensaver-password"
@@ -315,3 +340,13 @@ In addition to the cross-platform common mistakes in `RMM-CONVENTIONS.md`, these
 4. **Relying on Homebrew** — `brew` is user-installed and may not be present on managed Macs, especially in enterprise environments. Use built-in macOS CLI tools (`defaults`, `plutil`, `pmset`, `softwareupdate`, `system_profiler`, `launchctl`, `diskutil`) unless the user explicitly confirms Homebrew availability.
 
 5. **Custom fields in user context** — `ninjarmm-cli` only works under root. Since macOS defaults to user context, custom field reads/writes will silently fail unless the script is explicitly set to run as root in NinjaOne. If you need user data in a custom field, run as root and use `su - username -c "command"` or `launchctl asuser` to gather the user-context data.
+
+6. **Trusting the `#!/bin/zsh` shebang on NinjaOne** — NinjaOne's macOS agent executes scripts under bash regardless of the shebang. Any zsh-only syntax (e.g., `${0:t}`, `${(L)var}`, zsh array slicing, native associative arrays) will silently misbehave or fail under bash. Always include a re-exec guard at the very top of the script before any zsh-specific code or `set -u`:
+   ```zsh
+   if [ -z "${ZSH_VERSION:-}" ]; then
+       exec /bin/zsh "$0" "$@"
+   fi
+   ```
+   Use POSIX-safe `[ ... ]` (not `[[ ... ]]`) and `${ZSH_VERSION:-}` (parameter expansion default) in this guard so it works correctly while still under bash.
+
+7. **Relying on the inherited `PATH` on macOS** — The NinjaOne agent is launched by `launchd` with a minimal `PATH` (often just `/usr/bin:/bin`). Standard macOS admin tools live under `/usr/sbin` and `/sbin` — `networksetup`, `system_profiler`, `softwareupdate`, `pmset`, `diskutil`, `ifconfig`, `kextstat`, `nvram`, `scutil`, etc. — and will fail with `command not found` unless the path is explicit. Always set `export PATH="/usr/bin:/bin:/usr/sbin:/sbin"` near the top of the script, or invoke these binaries by full path.
