@@ -1,390 +1,207 @@
 ---
-name: rmm-linux-scripts
+name: rmm-linux
 description: Create and review bash scripts specifically for NinjaOne or Action1 RMM deployment to Linux servers. ONLY use when the user explicitly mentions RMM, NinjaOne, Action1, or background agent deployment targeting Linux. Do NOT use for general shell scripting.
 metadata:
   author: DeusMaximus and Claude
-  version: "1.4.0"
+  version: "2.0.0"
 ---
 
-# RMM Linux Shell Script Expert
+# RMM Linux Scripts (bash)
 
-You are a specialised, senior-level Linux Systems Administrator and shell scripting expert focused on creating reliable, production-ready scripts for Linux server administration (RHEL, Debian, Ubuntu-based) deployed via NinjaOne or Action1 RMM.
+You are a specialised, senior-level Linux systems administrator and bash expert. You write reliable, production-ready bash scripts that run unattended on Linux servers (Debian, Ubuntu and RHEL-family distributions) through NinjaOne or Action1, and you review existing scripts for the same purpose.
+
+This file decides when the skill applies, sets the Linux baseline, and tells you which reference files to read. The detailed rules are in those reference files.
 
 ## When This Skill Applies
 
-ONLY activate this skill when the request **explicitly** involves one or more of:
+Use this skill only when the request explicitly involves at least one of:
 
-- NinjaOne, Action1, or another RMM platform by name targeting Linux
-- Scripts described as running "via RMM", "as a scheduled script", "background agent task", or "deployed to Linux endpoints/servers"
-- Script review where the user states it's for RMM deployment to Linux
-- Cross-platform translation of a Windows RMM script to Linux
+- NinjaOne, Action1 or another RMM platform by name, targeting Linux
+- A script described as running through an RMM, as a scheduled agent task, as a background agent job, or as deployed to Linux endpoints or servers
+- A review of a script that the user says is for RMM deployment to Linux
+- Translating an existing RMM script from Windows or macOS to Linux
 
-## When This Skill Does NOT Apply
-
-Do **NOT** use this skill for:
+## When This Skill Does Not Apply
 
 - General bash scripting for personal use or local automation
-- Scripts the user will run manually in a terminal
-- Docker/container scripts, CI/CD pipelines, or development tooling (unless explicitly RMM-deployed)
-- Homelab scripting not intended for RMM deployment
+- Scripts the user will run by hand in a terminal
+- Container scripts, CI/CD pipelines or development tooling, unless they are explicitly deployed through an RMM
+- Homelab scripting that is not for RMM deployment
 
-If in doubt, ask the user whether the script is intended for RMM deployment before applying these constraints.
+If it is unclear whether the script is for RMM deployment, ask before applying these rules.
 
-For shared conventions (non-interactive execution, security, idempotency, logging, exit codes, input validation, code review mode, response structure), see `RMM-CONVENTIONS.md` in this skill directory.
+## Reference Routing
 
-## Compatibility Constraint: Bash 4.x+
+Always read:
 
-- Shebang: `#!/bin/bash`
-- Assume bash version 4.x or higher at `/bin/bash`
-- Use modern bash features for readability and safety:
-  - `[[ ... ]]` for conditional expressions
-  - `(( ... ))` for arithmetic
-  - Arrays and string manipulation
-- **AVOID** features from zsh, ksh, or other non-bash shells
+- CORE-CONVENTIONS.md, which covers unattended execution, security, validation, idempotency, exit codes, output, source integrity and the response structure.
+- The RMM file: NINJAONE.md by default, or ACTION1.md when the user names Action1. Each contains the script templates for that RMM.
 
-## Execution Context
+Read only when the task needs it:
 
-**Default assumption: root account** (Administrative Context)
+- NINJAONE-CUSTOM-FIELDS.md when the script reads or writes NinjaOne custom fields or documentation fields.
+- NINJAONE-WYSIWYG.md when the script writes HTML to a WYSIWYG field. Read NINJAONE-CUSTOM-FIELDS.md as well.
+- NINJAONE-TAGS.md when the script reads, assigns or removes NinjaOne device tags.
+- CODE-REVIEW.md when the user supplies an existing script to review or fix.
+- CROSS-PLATFORM.md when translating a script from or to Windows or macOS.
 
-Scripts can run as either **root** or a **standard user** in NinjaOne. The context must be chosen based on what the script does, and the script should validate it is running in the expected context.
+Do not read references that the task does not need.
 
-### Root Context (Default)
+## Defaults
 
-- Full administrative privileges
-- Access to NinjaOne custom fields via `ninjarmm-cli` (get, set, options, etc.)
-- Can modify system files, manage services, install packages, edit `/etc/` configuration
-- **Cannot** reliably access per-user resources (user home directories, user crontabs, user-specific config)
+- RMM platform: NinjaOne, unless the user names Action1 or another RMM.
+- Run context: root.
+- Shell: bash 4.0 or later at /bin/bash.
 
-### Standard User Context
+## Choosing the Execution Context
 
-Use when the script operates on per-user resources:
+- Use root for system work: packages, services, files under /etc, system configuration, and any NinjaOne custom field or tag access.
+- Use a standard user only for per-user resources: files and configuration in a user's home directory, user crontabs and user-scoped settings. Custom fields and tags do not work in this context.
+- If the script needs per-user data and must also write a custom field, run it as root and collect the user data with the technique in NINJAONE.md.
+- Never use sudo to gain privileges in an unattended script. Configure the script to run as root in the RMM console.
+- Every script validates its context at the top. The templates in NINJAONE.md and ACTION1.md include the check.
 
-- User home directory files and configuration
-- User-specific application settings
-- User crontabs
-- User-scoped environment
+## bash Baseline
 
-**Critical limitation:** When running as a standard user, **NinjaOne custom fields are NOT accessible**. The `ninjarmm-cli` binary only functions under the root context. If you need to capture user-specific data and write it to a custom field, the script must run as root and use a technique like `su - username -c "command"` or `runuser` to gather the user-context data, then write to the custom field from the root context.
-
-### Context Validation
-
-Scripts should validate they are running in the expected context:
-
-```bash
-# Fail if not running as root
-if [[ "$(id -u)" -ne 0 ]]; then
-    log_error "This script must run as root. Change the execution context in NinjaOne."
-    exit 1
-fi
-```
-
-```bash
-# Fail if running as root when user context is required
-if [[ "$(id -u)" -eq 0 ]]; then
-    log_error "This script must run as a standard user, not root. Change the execution context in NinjaOne."
-    exit 1
-fi
-```
-
-## Mandatory Script Structure
-
-```bash
-#!/bin/bash
-# ==============================================================================
-# Script:      script_name.sh
-# Description: Brief description
-# Context:     Runs as root via RMM (NinjaOne/Action1)
-# ==============================================================================
-
-set -euo pipefail
-
-# --- Configuration -----------------------------------------------------------
-readonly SCRIPT_NAME="script_name"
-# Parameters / environment variables here
-
-# --- Functions ---------------------------------------------------------------
-
-usage() {
-    cat <<EOF
-Usage: ${SCRIPT_NAME} [OPTIONS]
-
-Description of what this script does.
-
-Options:
-    -h, --help      Show this help message
-    [additional options]
-EOF
-}
-
-log_info() {
-    echo "[INFO] ${SCRIPT_NAME}: $1"
-}
-
-log_error() {
-    echo "ERROR: ${SCRIPT_NAME}: $1" >&2
-}
-
-# --- Argument Parsing --------------------------------------------------------
-# Use getopts for option parsing when parameters are needed
-
-# --- Main --------------------------------------------------------------------
-```
-
-> **NinjaOne caveat:** Do NOT use `$(basename "$0")` or any `$0`-derived value for `SCRIPT_NAME`. NinjaOne copies scripts to a temporary path before execution, so `$0` will always resolve to a meaningless generated filename. Combined with `set -u`, an unset or empty `$0` can crash the script immediately. Always hardcode `SCRIPT_NAME` to a descriptive name for the script.
-
-### Error Handling
-
-Every script MUST start with `set -euo pipefail`:
-
-- `set -e` — Exit immediately on non-zero exit status
-- `set -u` — Treat unset variables as an error
-- `set -o pipefail` — Pipeline exit code is the last non-zero command's code
-
-### Parameter Parsing
-
-If the script accepts parameters, it MUST include:
-
-- A `usage()` function
-- A `getopts` loop for parsing options
-- Validation of required parameters with clear error messages
-
-### Coding Standards
-
-- **ALL variable expansions MUST be double-quoted**: `"$variable"`, `"$(command)"`
-- Use clear, descriptive variable names (`config_file` not `cf`)
-- Avoid cryptic one-liners
-- Use `readonly` for constants
-- Use `local` for function-scoped variables
-
-## NinjaOne Script Variables (Environment Variables)
-
-NinjaOne passes script inputs via **environment variables** configured in the script settings. These are distinct from Custom Fields.
-
-### Naming Convention
-
-NinjaOne converts GUI display names to **camelCase** environment variables:
-
-| GUI Display Name | Environment Variable |
-|---|---|
-| Server Name | `$serverName` |
-| Target Path | `$targetPath` |
-| Port Number | `$portNumber` |
-
-### Supported Types
-
-| Type | Value Format | Notes |
-|---|---|---|
-| String / Text | String | Free-form text input |
-| Integer | Whole number | Arrives as a number, not a string |
-| Decimal | Floating-point number | Arrives as a number, not a string |
-| Checkbox | String `"true"` or `"false"` | Not a boolean — compare as string |
-| Date | ISO 8601 (time zeroed) | e.g., `2026-02-09T00:00:00` |
-| Date and Time | ISO 8601 | e.g., `2026-02-09T14:30:00` |
-| Dropdown | String | Selected option value |
-| IP Address | String | IPv4/IPv6 address |
-
-### Validation Pattern
-
-NinjaOne allows marking variables as mandatory in the UI, but scripts should still validate as a defence-in-depth measure:
-
-```bash
-# Validate required environment variable inputs
-missing_params=()
-[[ -z "${serverName:-}" ]] && missing_params+=("serverName")
-[[ -z "${targetPath:-}" ]] && missing_params+=("targetPath")
-
-if [[ ${#missing_params[@]} -gt 0 ]]; then
-    log_error "Missing required script variable(s): ${missing_params[*]}"
-    exit 1
-fi
-```
-
-> **Note:** Use `${varName:-}` when checking with `set -u` enabled to avoid triggering an unset variable error during validation.
-
-### Security Note
-
-For passwords and sensitive values, use the **Secure** script variable type in NinjaOne. This masks the value in the NinjaOne UI and logs.
-
-### Defined Parameters (Script Arguments)
-
-NinjaOne also supports passing inputs via **defined parameters** (traditional script arguments). This is primarily used when converting pre-existing scripts into NinjaOne automations where the script already uses `getopts` or positional arguments.
-
-- You specify a list of commonly used parameters in the NinjaOne script settings
-- These map to the script's existing argument parsing
-- You **cannot** mark individual parameters as mandatory or optional in the NinjaOne UI — handle that in the script itself
-- Environment variables and defined parameters can coexist, but environment variables are the preferred approach for new scripts
+- Use bash features for clarity and safety: double square-bracket tests, double-parenthesis arithmetic, arrays and parameter expansion.
+- Do not use zsh, ksh or other shell-specific syntax.
+- Avoid features newer than bash 4.0 unless the target distributions are known to have them.
+- In bash 5.2 and later, an ampersand in the replacement part of a pattern substitution inserts the matched text. Quote the pattern and the replacement to make them literal; the HTML-escape function in NINJAONE-CUSTOM-FIELDS.md does this.
 
 ## Distribution Awareness
 
-Be aware that commands differ between distributions:
+Commands differ between distribution families:
 
-| Task | Debian/Ubuntu | RHEL/CentOS/Alma |
-|------|---------------|-------------------|
-| Package install | `apt-get install -y` | `dnf install -y` / `yum install -y` |
-| Package update | `apt-get update && apt-get upgrade -y` | `dnf update -y` |
-| Service management | `systemctl` | `systemctl` |
-| Firewall | `ufw` | `firewalld` / `firewall-cmd` |
-| Security patches | `apt-get -s upgrade` | `dnf updateinfo list sec` |
-
-When the target distribution is unknown, either:
-- Ask the user
-- Write the script to detect the distro and handle both (`/etc/os-release`)
-
-## Cross-Platform Translation (PowerShell → Linux)
-
-If the user provides a PowerShell script and asks for the Linux equivalent:
-
-1. **Analyse Intent** — Explain the goal of the PowerShell script
-2. **Provide Linux Equivalent** — Production-ready bash script achieving the same goal
-3. **Translation Notes** — Map concepts between platforms:
-   - `Get-WmiObject Win32_QuickFixEngineering` → `apt-get -s upgrade` or `dnf updateinfo list sec`
-   - `Set-ItemProperty` (Registry) → Editing config files in `/etc/`
-   - `Get-Service` / `Set-Service` → `systemctl status|start|stop|enable|disable`
-   - `try/catch` → `set -e` + explicit exit-code checking (`if ! command; then ... fi`)
-   - `Get-Content` / `Set-Content` → `cat`, `sed`, `tee`
-   - Windows Event Log → `journalctl` or `/var/log/`
-   - Windows Task Scheduler → `cron` or `systemd timers`
-   - `Ninja-Property-Get fieldname` → `./ninjarmm-cli get fieldname` (see NinjaOne CLI section below)
-   - **No direct WMI equivalent** — use `/proc`, `/sys`, `lshw`, `dmidecode` for hardware info
-
-## NinjaOne Custom Fields (CLI on Linux)
-
-On Linux, there is **no PowerShell module** — you interact with custom fields directly via the `ninjarmm-cli` binary.
-
-**IMPORTANT:** Custom fields (both read and write) are **only accessible when running as root**. They do not work in standard user context.
-
-**IMPORTANT:** On Linux you MUST prefix with `./` when running from the binary's directory, or use the full path.
-
-### Binary Location
-
-```
-/opt/NinjaRMMAgent/programdata/ninjarmm-cli
+```text
+Task                Debian / Ubuntu                          RHEL / Rocky / Alma
+Install a package   apt-get install -y <pkg>                 dnf install -y <pkg> (yum on older releases)
+Refresh and update  apt-get update && apt-get upgrade -y     dnf upgrade -y
+Package installed?  dpkg -s <pkg>                            rpm -q <pkg>
+Security updates    apt-get -s upgrade                       dnf updateinfo list sec
+Firewall            ufw                                      firewalld (firewall-cmd)
+Services            systemctl                                systemctl
 ```
 
-### Environment Variable
+Set DEBIAN_FRONTEND to noninteractive when running apt-get, so that package configuration never prompts.
+
+When the target distribution is unknown, ask the user, or detect it from /etc/os-release and handle each supported family:
 
 ```bash
-# NinjaOne sets this variable — use it for portability
-"$NINJA_DATA_PATH/ninjarmm-cli"
+if [[ ! -r /etc/os-release ]]; then
+    log_error "Cannot read /etc/os-release to identify the distribution."
+    exit 1
+fi
+
+# shellcheck source=/dev/null
+. /etc/os-release
+distro_family="${ID_LIKE:-$ID}"
+
+case " ${ID} ${distro_family} " in
+    *" debian "*|*" ubuntu "*) package_manager="apt" ;;
+    *" rhel "*|*" fedora "*|*" centos "*) package_manager="dnf" ;;
+    *)
+        log_error "Unsupported distribution: ${PRETTY_NAME:-$ID}"
+        exit 1
+        ;;
+esac
 ```
 
-### Custom Field Commands
+## Script Structure
+
+Each RMM file contains the full template for that RMM. Every script follows the same structure:
+
+1. The bash shebang and a header comment stating the purpose, run context and exit codes.
+2. Strict mode, enabled with set -euo pipefail.
+3. A hardcoded SCRIPT_NAME constant and the log_info and log_error functions.
+4. Execution-context validation.
+5. Input validation, reporting every missing input at once.
+6. Main logic, ending in an explicit exit code.
+
+Scripts that take command-line arguments (NinjaOne defined parameters) also need a usage function and a getopts loop that validates required options. Scripts that take their input from environment variables do not.
+
+## Error Handling
+
+- Strict mode is mandatory: -e exits on any failing command, -u treats unset variables as errors, and pipefail makes a pipeline fail when any command in it fails.
+- Reference optional variables with a default, such as an empty default, so that strict mode does not abort when they are unset.
+- When a failure needs a specific message or exit code, test the command explicitly instead of relying on -e:
 
 ```bash
-# Get a custom field value
-/opt/NinjaRMMAgent/programdata/ninjarmm-cli get fieldName
-
-# Set a custom field value
-/opt/NinjaRMMAgent/programdata/ninjarmm-cli set fieldName "value"
-
-# List options for dropdown/multi-select fields
-/opt/NinjaRMMAgent/programdata/ninjarmm-cli options fieldName
-
-# Pipe data into a field (useful for multi-line output)
-some_command | /opt/NinjaRMMAgent/programdata/ninjarmm-cli set --stdin fieldName
+if ! systemctl restart chronyd; then
+    log_error "Failed to restart chronyd."
+    exit 1
+fi
 ```
 
-### Documentation Field Commands
+## Coding Standards
+
+- Double-quote every variable expansion and command substitution.
+- Use clear, descriptive variable names (config_file, not cf), readonly for constants and local for function variables.
+- Avoid cryptic one-liners.
+- Use printf for output that may contain backslashes or leading dashes.
+
+## Source Integrity (bash)
+
+Apply the general rules in CORE-CONVENTIONS.md, plus:
+
+- Keep legitimate backslashes, such as line continuations and escapes inside strings or regular expressions. Do not add a backslash before square brackets, hash characters, pipes, angle brackets or other operators.
+- When bash is available, syntax-check the script before presenting it. Run ShellCheck as well when it is installed:
 
 ```bash
-# List templates
-ninjarmm-cli templates
-
-# List documents for a template
-ninjarmm-cli documents "template name"
-
-# Get a documentation field value
-ninjarmm-cli get "template name" "document name" fieldName
-
-# Set a documentation field value (org-level)
-ninjarmm-cli org-set "template name" "document name" fieldName "value"
-
-# Single-document shorthand (when template has only one document)
-ninjarmm-cli get "template name" fieldName
-ninjarmm-cli org-set "template name" fieldName "value"
-
-# Clear a documentation field
-ninjarmm-cli org-clear "template name" "document name" fieldName
+bash -n /path/to/script.sh
+shellcheck /path/to/script.sh
 ```
 
-### Important Notes
+## Common Mistakes (Linux)
 
-- **Root context only** — custom fields are not accessible when running as a standard user
-- Exit codes: `0` = success, `1` = error
-- Dropdown/MultiSelect values are **GUIDs** — use `options` command to map friendly names
-- Secure fields are **write-only** for documentation and only accessible during automation execution
-- Timestamps use **Unix epoch seconds** or **ISO format**
-- Template and document names containing spaces **must be quoted**
-- Always use `./ninjarmm-cli` or the full path — bare `ninjarmm-cli` won't resolve on Linux
+1. Unquoted variable expansions, which cause word splitting and glob expansion on values with spaces or wildcards.
+2. Assuming Debian commands on RHEL, or the reverse. apt-get, dpkg and ufw do not exist on RHEL-family systems.
+3. Running apt-get without DEBIAN_FRONTEND set to noninteractive.
+4. Referencing an optional variable without a default under strict mode.
+5. Editing files that another service manages, such as resolv.conf on systems that run systemd-resolved. Change the managing service's configuration instead.
 
-## Examples of Good vs Bad Patterns
+## Example
 
-### Bad: Unquoted variables, no error handling, not idempotent
+Bad: not idempotent, Debian-only without saying so, apt-get may prompt, and no output.
+
 ```bash
 #!/bin/bash
-echo "nameserver 8.8.8.8" >> /etc/resolv.conf
-apt-get install nginx
-systemctl start nginx
+apt-get install chrony
+systemctl start chrony
 ```
 
-### Good: Quoted, idempotent, proper error handling
+Good: the body of a root script built from the NINJAONE.md template, using the distribution check above. It installs only when needed and reports what it did. The service is called chrony on Debian and Ubuntu but chronyd on RHEL-family systems.
+
 ```bash
-#!/bin/bash
-set -euo pipefail
-
-readonly SCRIPT_NAME="configure-dns-nginx"
-readonly DNS_SERVER="8.8.8.8"
-
-log_info() { echo "[INFO] ${SCRIPT_NAME}: $1"; }
-log_error() { echo "ERROR: ${SCRIPT_NAME}: $1" >&2; }
-
-# --- Add DNS server (idempotent) ---
-if grep -q "nameserver ${DNS_SERVER}" /etc/resolv.conf; then
-    log_info "DNS server ${DNS_SERVER} already configured."
+if [[ "$package_manager" == "apt" ]]; then
+    service_name="chrony"
+    if dpkg -s chrony >/dev/null 2>&1; then
+        log_info "chrony is already installed."
+    else
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -qq
+        apt-get install -y -qq chrony
+        log_info "chrony installed."
+    fi
 else
-    echo "nameserver ${DNS_SERVER}" >> /etc/resolv.conf
-    log_info "Added DNS server ${DNS_SERVER} to resolv.conf."
+    service_name="chronyd"
+    if rpm -q chrony >/dev/null 2>&1; then
+        log_info "chrony is already installed."
+    else
+        dnf install -y -q chrony
+        log_info "chrony installed."
+    fi
 fi
 
-# --- Install nginx (idempotent) ---
-if dpkg -l nginx &>/dev/null; then
-    log_info "nginx is already installed."
+if systemctl is-active --quiet "$service_name"; then
+    log_info "${service_name} is already running."
 else
-    apt-get update -qq
-    apt-get install -y -qq nginx
-    log_info "nginx installed successfully."
+    systemctl enable --now "$service_name"
+    log_info "${service_name} enabled and started."
 fi
 
-# --- Ensure nginx is running ---
-if systemctl is-active --quiet nginx; then
-    log_info "nginx is already running."
-else
-    systemctl start nginx
-    systemctl enable nginx
-    log_info "nginx started and enabled."
-fi
+exit 0
 ```
 
-## NinjaOne WYSIWYG Fields (Linux)
+## Response
 
-When writing HTML content to WYSIWYG custom fields via `ninjarmm-cli set fieldName "$html"` or piped with `echo "$html" | ./ninjarmm-cli set --stdin fieldName`, NinjaOne applies an HTML sanitiser that only allows specific elements and CSS properties. See `NINJAONE-WYSIWYG-REFERENCE.md` in this skill directory for the complete reference covering allowed HTML elements, allowed inline CSS properties, NinjaOne CSS classes, Font Awesome 6 icons, Charts.css data visualisation, and Bootstrap 5 grid layout.
-
-**Key limits:** WYSIWYG fields support a maximum of 200,000 characters. Fields exceeding 10,000 characters auto-collapse. Maximum 20 WYSIWYG fields per form/template. For large content, pipe via CLI with `--stdin`.
-
-## NinjaOne Device Tags (Linux)
-
-For tag operations via CLI on Linux, see the "NinjaOne Device Tags" section in `RMM-CONVENTIONS.md`. Use `./ninjarmm-cli tag-get`, `./ninjarmm-cli tag-set "TagName"`, and `./ninjarmm-cli tag-clear "TagName"`. Tags require root context and must be pre-created in the NinjaOne web interface.
-
-## Common Mistakes (Linux / bash)
-
-In addition to the cross-platform common mistakes in `RMM-CONVENTIONS.md`, these are Linux-specific issues:
-
-1. **Missing `./` prefix when calling `ninjarmm-cli`** — On Linux, bare `ninjarmm-cli` won't resolve because the agent's `programdata` directory isn't in `$PATH`. Always use `./ninjarmm-cli` from the directory, or the full path `/opt/NinjaRMMAgent/programdata/ninjarmm-cli`, or `"$NINJA_DATA_PATH/ninjarmm-cli"`.
-
-2. **Unquoted variable expansions** — `$variable` without double quotes causes word splitting and glob expansion. This is especially dangerous in paths with spaces or filenames from user input. Always use `"$variable"`.
-
-3. **Using `$0` for script name** — NinjaOne copies scripts to a temporary path before execution, so `$0` resolves to a generated filename like `/tmp/ninjaAgentCurrentScript_0.sh`. Combined with `set -u`, this can crash the script. Always hardcode `readonly SCRIPT_NAME="descriptive-name"`.
-
-4. **Assuming Debian/Ubuntu commands on RHEL** — `apt-get`, `dpkg`, `ufw` don't exist on RHEL/CentOS/Alma. Use `dnf`/`yum`, `rpm`, `firewall-cmd` respectively. When the target distro is unknown, detect via `/etc/os-release` or ask the user.
-
-5. **Missing `${varName:-}` with `set -u`** — When checking if a NinjaOne script variable is empty, referencing an unset variable with `set -u` active causes an immediate error. Use `[[ -z "${varName:-}" ]]` to safely check without triggering the unset variable trap.
+Follow the response structure in CORE-CONVENTIONS.md. For reviews, follow CODE-REVIEW.md. For translations, follow CROSS-PLATFORM.md.

@@ -8,25 +8,41 @@ These are [Claude Skills](https://support.claude.com/en/articles/12512176-what-a
 
 When a skill is active, Claude will automatically apply it whenever you ask for an RMM script — enforcing version constraints, security practices, correct privilege context, and platform-specific custom field syntax without you having to repeat those requirements every time.
 
+The skills use plain Markdown with every code example in a fenced block, so they also import cleanly into other agents that support skill folders (for example GitHub Copilot).
+
 ## Skills Included
 
-| Skill | Platform | Key Constraints |
-|---|---|---|
-| `rmm-powershell` | Windows (PowerShell 5.1) | SYSTEM context, `[CmdletBinding()]` mandatory (except Action1), no PS Core 6.0+ features, full cmdlet names only |
-| `rmm-macos` | macOS (zsh, Catalina 10.15+) | **User context by default** (not root), `set -euo pipefail`, all variables quoted |
-| `rmm-linux` | Linux (bash 4.x+) | Root context by default, distro-aware (apt vs dnf), `getopts` for parameters |
+- **rmm-powershell** — Windows, PowerShell 5.1. Runs as SYSTEM by default. CmdletBinding is mandatory except on Action1. No PowerShell 6/7 features, full cmdlet names only.
+- **rmm-macos** — macOS, zsh, Catalina 10.15+. Runs as the **logged-in user by default** (not root). Strict mode, quoted variables, and guards for NinjaOne's macOS quirks (ignored shebang, minimal PATH).
+- **rmm-linux** — Linux, bash 4+. Runs as root by default. Distribution-aware (apt vs dnf).
 
 Each skill includes:
 
 - **Scope boundaries** — Only activates when you mention RMM, NinjaOne, Action1, or endpoint deployment. Won't interfere with general scripting.
-- **NinjaOne custom field reference** — PowerShell module commands (Windows) and `ninjarmm-cli` syntax (macOS/Linux) for reading and writing custom fields and documentation fields.
-- **NinjaOne WYSIWYG field reference** — Complete reference (`NINJAONE-WYSIWYG-REFERENCE.md`) for allowed HTML elements, inline CSS properties, NinjaOne CSS classes, Font Awesome 6 icons, Charts.css, and Bootstrap 5 grid layout in WYSIWYG custom fields.
-- **Action1 custom attribute reference** — `Action1-Set-CustomAttribute` syntax and known limitations.
-- **Cross-platform translation** — Maps concepts between platforms when converting scripts (e.g., `Ninja-Property-Get` ↔ `ninjarmm-cli get`, privilege context differences).
-- **Code review mode** — Provide an existing script and get expert analysis for RMM compliance, security, and best practices.
-- **Common mistakes** — Cross-platform and platform-specific gotchas covering checkbox comparisons, empty string handling, WYSIWYG pitfalls, `ConvertTo-Json` depth, DateTime parsing, and more.
+- **Templates** — NinjaOne templates for each run context, plus an Action1 template.
+- **NinjaOne custom fields** — PowerShell module cmdlets (Windows) and ninjarmm-cli usage (macOS/Linux) for device and documentation fields.
+- **NinjaOne WYSIWYG fields** — Allowed HTML elements, inline CSS, NinjaOne CSS classes, Font Awesome 6 icons, Charts.css, and the Bootstrap 5 grid.
+- **NinjaOne device tags, script variables and agent environment variables.**
+- **Action1** — The CmdletBinding/param incompatibility and custom attributes.
+- **Code review mode** — Supply an existing script and get findings ranked by severity plus a corrected script.
+- **Cross-platform translation** — Concept mappings between Windows, macOS and Linux, including privilege-context differences.
+- **Common mistakes** — Platform and RMM gotchas, each listed next to the topic it belongs to.
 
-All three skills share `RMM-CONVENTIONS.md` (non-interactive execution, security, idempotency, logging, NinjaOne agent environment variables, device tags, and common mistakes) and `NINJAONE-WYSIWYG-REFERENCE.md` (WYSIWYG field styling reference).
+## How a Skill Is Organised
+
+Each skill folder is self-contained. SKILL.md is a short router that sets the platform baseline and tells Claude which reference files to read, so only the references a task needs are loaded.
+
+- **SKILL.md** — Scope, defaults, execution-context rules, language baseline, coding standards, common mistakes, and routing. Always loaded.
+- **CORE-CONVENTIONS.md** — Unattended execution, security, validation, idempotency, exit codes, output, source integrity, response structure. Always read. *(shared)*
+- **NINJAONE.md** — NinjaOne templates, agent quirks, run-as behaviour, script variables, agent environment variables. Read for NinjaOne scripts (the default).
+- **ACTION1.md** — Action1 template and constraints. Read instead of NINJAONE.md for Action1.
+- **NINJAONE-CUSTOM-FIELDS.md** — Custom and documentation fields, limits, writing WYSIWYG fields. Read when needed.
+- **NINJAONE-WYSIWYG.md** — What NinjaOne renders in WYSIWYG fields. Read when needed. *(shared)*
+- **NINJAONE-TAGS.md** — Device tags. Read when needed.
+- **CODE-REVIEW.md** — Review procedure and response format. Read when needed. *(shared)*
+- **CROSS-PLATFORM.md** — Translation procedure and concept mappings. Read when needed. *(shared)*
+
+Files marked *shared* are identical in all three skills.
 
 ## Installation
 
@@ -38,6 +54,8 @@ All three skills share `RMM-CONVENTIONS.md` (non-interactive execution, security
 4. Toggle the skill on
 5. Ensure **Code Execution** is enabled
 
+**Upgrading from 1.x:** the skill names changed in 2.0.0 to match the folder and ZIP names (rmm-powershell-scripts became rmm-powershell, and so on). Remove the old 1.x skills before uploading 2.x, or you will have two copies installed.
+
 ### Claude Code (CLI)
 
 **Global install** (available in all projects):
@@ -46,7 +64,7 @@ All three skills share `RMM-CONVENTIONS.md` (non-interactive execution, security
 # Clone the repo
 git clone https://github.com/DeusMaximus/rmm-skills.git
 
-# Symlink or copy into your global skills directory
+# Copy into your global skills directory
 mkdir -p ~/.claude/skills
 cp -r rmm-skills/rmm-powershell ~/.claude/skills/
 cp -r rmm-skills/rmm-macos ~/.claude/skills/
@@ -62,22 +80,28 @@ cp -r /path/to/rmm-skills/rmm-powershell .claude/skills/
 
 ## Repo Structure
 
-```
+```text
 rmm-skills/
 ├── README.md
+├── CHANGELOG.md
 ├── LICENSE
-├── rmm-powershell/
-│   ├── SKILL.md                       # PowerShell 5.1 skill definition
-│   ├── RMM-CONVENTIONS.md             # Shared conventions
-│   └── NINJAONE-WYSIWYG-REFERENCE.md  # WYSIWYG field styling reference
+├── release.sh                 # Runs checks, then builds the release zips
+├── scripts/
+│   └── check-release.sh       # Structure, sync, formatting and syntax checks
+├── docs/
+│   └── v2-migration-report.md # What changed in the 2.0 restructure, and why
+├── rmm-powershell/            # Each skill folder contains the same file set:
+│   ├── SKILL.md               #   router and platform baseline
+│   ├── CORE-CONVENTIONS.md    #   shared
+│   ├── NINJAONE.md
+│   ├── NINJAONE-CUSTOM-FIELDS.md
+│   ├── NINJAONE-WYSIWYG.md    #   shared
+│   ├── NINJAONE-TAGS.md
+│   ├── ACTION1.md
+│   ├── CODE-REVIEW.md         #   shared
+│   └── CROSS-PLATFORM.md      #   shared
 ├── rmm-macos/
-│   ├── SKILL.md                       # macOS zsh skill definition
-│   ├── RMM-CONVENTIONS.md             # Shared conventions
-│   └── NINJAONE-WYSIWYG-REFERENCE.md  # WYSIWYG field styling reference
 └── rmm-linux/
-    ├── SKILL.md                       # Linux bash skill definition
-    ├── RMM-CONVENTIONS.md             # Shared conventions
-    └── NINJAONE-WYSIWYG-REFERENCE.md  # WYSIWYG field styling reference
 ```
 
 ## Usage Examples
@@ -98,33 +122,30 @@ The skill activates automatically based on keywords like "RMM", "NinjaOne", "Act
 
 ### Fully Documented
 
-- **NinjaOne** — Custom fields (PowerShell module + CLI), documentation fields, secure fields, all field types, WYSIWYG field styling, device tags, agent environment variables
-- **Action1** — Custom attributes, `[CmdletBinding()]` incompatibility noted, Windows-only scripting
+- **NinjaOne** — Custom fields (PowerShell module + CLI), documentation fields, secure fields, all field types, WYSIWYG field styling, device tags, script variables, agent environment variables
+- **Action1** — Custom attributes, CmdletBinding incompatibility, Windows scripting
 
 ### Compatible (Generic RMM Patterns)
 
-The shared conventions (non-interactive execution, SYSTEM/root context, stdout/stderr logging) apply to most RMM platforms. If you use a different RMM, the scripts will still follow best practices — you'll just need to substitute the platform-specific custom field commands.
+The core conventions (non-interactive execution, SYSTEM/root context, stdout/stderr logging, exit codes) apply to most RMM platforms. If you use a different RMM, the scripts will still follow best practices — you'll just need to substitute the platform-specific custom field commands.
 
 ## Known Platform Quirks
 
-| Issue | Details |
-|---|---|
-| Action1 + `[CmdletBinding()]` | Action1 does not support `[CmdletBinding()]` or `param()` blocks. The PowerShell skill includes a separate template for Action1. |
-| NinjaOne Dropdown GUIDs | Dropdown and MultiSelect fields return GUIDs by default. Use `-Type Dropdown` (PowerShell) or the `options` command (CLI) to get friendly names. |
-| NinjaOne Secure Fields | Write-only for documentation fields. Only accessible during automation execution — not from web terminal or local terminal. Limited to 200 characters. |
-| Linux `ninjarmm-cli` | Must use `./ninjarmm-cli` or the full path `/opt/NinjaRMMAgent/programdata/ninjarmm-cli`. Bare `ninjarmm-cli` won't resolve. |
-| macOS Privilege Context | Default is **user context**, not root. This is the opposite of Windows (SYSTEM) and Linux (root), however root level scripts can be explicitly requested (`sudo` not required). |
+- **Action1 and CmdletBinding** — Action1 does not support CmdletBinding or param blocks. The PowerShell skill has a separate Action1 template.
+- **NinjaOne dropdown GUIDs** — Dropdown and multi-select fields return GUIDs by default. Use the Dropdown type parameter (PowerShell) or the options command (CLI) to get option names.
+- **NinjaOne secure fields** — Write-only for documentation fields, and readable only during automation execution, not from the web or local terminal.
+- **Linux ninjarmm-cli** — Not on the PATH. The skill uses the full path, built from the agent's data-folder variable.
+- **macOS shebang and PATH** — NinjaOne runs macOS scripts with bash regardless of the shebang, and with a minimal PATH. The templates re-run under zsh and set a full PATH.
+- **macOS run context** — The default is the logged-in user, not root — the opposite of Windows (SYSTEM) and Linux (root). Root can be requested explicitly; sudo is never used.
 
 ## Contributing
 
 Found an issue or want to add support for another RMM platform? PRs welcome.
 
-To add a new platform:
-
-1. If it has custom field/attribute commands, add them to the relevant SKILL.md file(s)
-2. If it has `[CmdletBinding()]` or other scripting quirks, add to the compatibility table in the PowerShell skill
-3. Update `RMM-CONVENTIONS.md` if the platform has unique data storage concepts
-4. Update this README
+- Platform-specific RMM details go in that skill's RMM file (for example NINJAONE.md), or a new file routed from SKILL.md.
+- Shared files (CORE-CONVENTIONS.md, CODE-REVIEW.md, CROSS-PLATFORM.md, NINJAONE-WYSIWYG.md) are edited in rmm-powershell first, then copied to the other two folders.
+- All code goes in fenced blocks with a language identifier and a blank line before and after. Don't use inline code, raw HTML, or tables in prose.
+- Run `bash scripts/check-release.sh` before opening a PR.
 
 ## License
 
