@@ -23,7 +23,7 @@ Work through each area and record every finding.
 8. Output: whether success and failure output is useful for unattended troubleshooting.
 9. RMM platform specifics: script variable handling, custom field types and limits, tag usage, and the platform quirks listed in NINJAONE.md or ACTION1.md.
 10. Readability and maintainability: aliases, cryptic one-liners, dead code, and naming.
-11. Source integrity: Markdown escape artefacts or other corruption in the supplied source (CORE-CONVENTIONS.md).
+11. Source integrity: Markdown escape artefacts or other corruption in the supplied source (CORE-CONVENTIONS.md). Uploaded files can be displayed to you with backslashes that are not in the real file. If the supplied script appears to contain escape artefacts, say that the display layer may have added them and ask the user to check the original file, rather than reporting them as defects in the script.
 
 Also check the script against the Common Mistakes list in the platform's SKILL.md and RMM file.
 

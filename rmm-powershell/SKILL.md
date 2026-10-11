@@ -132,9 +132,14 @@ catch {
 
 ## Source Integrity (PowerShell)
 
-Apply the general rules in CORE-CONVENTIONS.md, plus:
+Apply the general rules in CORE-CONVENTIONS.md, plus the PowerShell-specific checks below.
 
-- Type literals and attributes contain plain square brackets, with no backslash before either bracket.
+### Display Artefacts
+
+Some agent environments show these reference files, and files that users upload, with a backslash inserted before square brackets, most often before the closing bracket of a type literal. Chat interfaces can then alter that escaped text again when they display it. In one observed case, an escaped string type literal followed by a double colon was displayed as a single colon, which broke the script.
+
+- Real PowerShell never has a backslash directly before the opening or closing bracket of a type literal or attribute. If you see one in a reference or an uploaded file, it is a display artefact. Do not reproduce it.
+- Every double colon must come immediately after a closing square bracket, with the complete type name inside the brackets (for example string, int or System.Security.Principal.WindowsIdentity). A double colon, or a colon directly before a method name, with no type literal in front of it means the type literal has been lost.
 - Comments start with a plain hash character, and block comments use the angle-bracket and hash pair.
 - Keep legitimate backslashes in paths, account names and regular expressions. For example, these are correct as written:
 
@@ -144,13 +149,63 @@ $SystemAccount = 'NT AUTHORITY\SYSTEM'
 $Domain, $UserName = $AccountName.Split('\', 2)
 ```
 
-- When PowerShell is available, parse the script before presenting it. This check reports syntax errors only, so it does not replace the 5.1 feature list above (a PowerShell 7 parser accepts 7-only syntax):
+Before presenting a script, read through every type literal, attribute and static call against these rules, even when a validation tool has passed.
+
+### Validating PowerShell
+
+Use the first option that is available:
+
+1. A terminal with Windows PowerShell (powershell.exe) or PowerShell 7 (pwsh): parse the script file. This reports syntax errors only, so it does not replace the 5.1 feature list above, because a PowerShell 7 parser accepts 7-only syntax.
+2. A bash sandbox without PowerShell: run the static scan below. It finds escaped brackets and hashes, and lost type literals, which are the faults that display layers introduce. It is not a full parser, so report "static scan only" in the deployment summary.
+3. No tools: carry out the read-through above and report that no validation tool was available.
+
+When you can create files, write the script to a .ps1 file, validate that file, and give the user the file as well as showing the script inline. A downloaded file does not pass through the chat display, so it is the authoritative copy.
+
+Parse a script file with PowerShell:
 
 ```powershell
 $Tokens = $null
 $ParseErrors = $null
 [System.Management.Automation.Language.Parser]::ParseFile('C:\Temp\Script.ps1', [ref]$Tokens, [ref]$ParseErrors) | Out-Null
 $ParseErrors | ForEach-Object { $_.ToString() }
+```
+
+Static scan in bash, for a sandbox without PowerShell. It avoids square brackets, backslashes and hashes in its own source, so the same display artefacts cannot corrupt it. Review each hit, because a regular expression in the script may legitimately contain an escaped bracket.
+
+```bash
+awk '
+function report(msg) { print FILENAME ":" FNR ": " msg ": " line; bad = 1 }
+BEGIN { bs = sprintf("%c", 92); ob = sprintf("%c", 91); cb = sprintf("%c", 93); hs = sprintf("%c", 35); bad = 0 }
+{
+    line = $0
+    if (index(line, bs ob)) report("backslash before an opening bracket")
+    if (index(line, bs cb)) report("backslash before a closing bracket")
+    if (index(line, bs hs)) report("backslash before a hash")
+    n = length(line)
+    for (i = 1; i != n + 1; i++) {
+        if (substr(line, i, 1) != ":") continue
+        before = (i == 1) ? " " : substr(line, i - 1, 1)
+        if (substr(line, i, 2) == "::") {
+            if (before != cb) report("double colon without a type literal before it")
+            i++
+            continue
+        }
+        after = substr(line, i + 1, 1)
+        if (index(" (,=!", before)) {
+            if (after != tolower(after)) report("colon before a method name; type literal missing")
+        }
+    }
+}
+END { exit bad }
+' Script.ps1
+```
+
+When no full parse was possible, include this check in the deployment summary so that the operator can parse the script on Windows before pasting it into the RMM console. It reads the script from the clipboard:
+
+```powershell
+$ParseErrors = $null
+[void][System.Management.Automation.Language.Parser]::ParseInput((Get-Clipboard -Raw), [ref]$null, [ref]$ParseErrors)
+if ($ParseErrors) { $ParseErrors | ForEach-Object { "Line $($_.Extent.StartLineNumber): $($_.Message)" } } else { 'No syntax errors.' }
 ```
 
 ## Common Mistakes (PowerShell)
@@ -163,6 +218,7 @@ $ParseErrors | ForEach-Object { $_.ToString() }
 6. Ignoring LASTEXITCODE after running an executable.
 7. Leaving out context validation, so a script configured with the wrong run-as setting fails silently.
 8. Calling ConvertTo-Json on nested objects without -Depth.
+9. Reproducing a display artefact: a backslash before a type-literal bracket, or a static call whose type literal has been lost.
 
 ## Example
 

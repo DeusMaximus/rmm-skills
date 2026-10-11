@@ -144,11 +144,23 @@ fi
 Apply the general rules in CORE-CONVENTIONS.md, plus:
 
 - Keep legitimate backslashes, such as line continuations and escapes inside strings or regular expressions. Do not add a backslash before square brackets, hash characters, pipes, angle brackets or other operators.
-- When bash is available, syntax-check the script before presenting it. Run ShellCheck as well when it is installed:
+- Some agent environments show reference files and uploaded files with a backslash inserted before square brackets, hash characters and other punctuation. Those backslashes are display artefacts; do not reproduce them.
+- When bash is available, write the script to a file and syntax-check it before presenting it. Run ShellCheck as well when it is installed. Then scan it for backslashes in front of square brackets, because an escaped test bracket can still pass the syntax check. The scan avoids those characters in its own source. Review any hit, because a regular expression may legitimately need one:
 
 ```bash
 bash -n /path/to/script.sh
 shellcheck /path/to/script.sh
+awk '
+BEGIN { bs = sprintf("%c", 92); ob = sprintf("%c", 91); cb = sprintf("%c", 93) }
+index($0, bs ob) { print FILENAME ":" FNR ": backslash before a bracket: " $0; next }
+index($0, bs cb) { print FILENAME ":" FNR ": backslash before a bracket: " $0 }
+' /path/to/script.sh
+```
+
+- If the script could not be syntax-checked, give the operator this check in the deployment summary. It needs bash on Linux, macOS or WSL, with the script saved to a file:
+
+```bash
+bash -n script.sh && echo "No syntax errors."
 ```
 
 ## Common Mistakes (Linux)

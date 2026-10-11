@@ -119,3 +119,19 @@ Every request loads SKILL.md, CORE-CONVENTIONS.md and the RMM file (NINJAONE.md,
 - **Action1 script:** ACTION1.md instead of NINJAONE.md.
 - **Review an existing script:** plus CODE-REVIEW.md, and any feature references the script uses.
 - **Translate Windows to macOS (in the macOS skill):** plus CROSS-PLATFORM.md, and any feature references the script uses.
+
+## Post-Restructure Testing in GitHub Copilot
+
+Three test prompts were run in Copilot with the 2.0 skills: a PowerShell WYSIWYG disk report with a custom exit code, a macOS dropdown-to-tag script, and a review of a planted-bug script.
+
+- **Passed:** both generated scripts parsed cleanly, used the 2.0 patterns (Write-LogError before custom exits, TryParse on optional integers, NINJA_CLI for every CLI call, dropdown GUIDs mapped through options), and loaded the routed references. The review found all three planted bugs and did not repeat the old false claim about Select-Object -SkipLast.
+- **Failed:** the review's corrected script came back twice with the line containing the string type literal and IsNullOrWhiteSpace shown as a bare colon, which is a parse error. The user saw the raw text stream as the type literal with an escaped closing bracket before the display settled on the colon. When asked, Copilot also listed backslash-escaped type literals in its own earlier output that were not visible in the rendered code.
+- **Diagnosis:** Copilot shows the model escaped text, including uploads, and said so itself ("the escapes shown in the retrieved preview are not present in the source"). The model sometimes reproduces the escape, and Copilot's display usually removes it again, but not always. Clean Markdown in the skills cannot prevent this, so the defence moved to the output side.
+- **Changes:**
+  - The artefact is now named explicitly in the skills.
+  - PowerShell has a self-check (every double colon follows a closing bracket).
+  - Validation follows a ladder that works without PowerShell: an awk scan that uses no brackets, backslashes or hashes in its own source, so the same artefact cannot corrupt it.
+  - Scripts are delivered as files where possible.
+  - When a script was not fully parsed, the deployment summary includes an operator check before pasting into NinjaOne.
+- **Verified:** the PowerShell scan flagged all 7 corrupted samples with no false positives across 27 clean files, under gawk and mawk. The shell scan flags an escaped double-bracket test, which zsh -n accepts as valid.
+

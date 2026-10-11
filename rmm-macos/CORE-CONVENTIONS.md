@@ -90,7 +90,9 @@ Reference files may reach you through a conversion layer that escapes Markdown c
 - Never Markdown-escape source code. Do not add a backslash before square brackets, hash characters, underscores, asterisks, angle brackets, pipes or backticks.
 - If an example in these references shows a backslash before one of those characters, and the context is not a string, regular expression, path or account name, treat it as a display artefact. Remove the backslash in your output rather than copying it.
 - Keep legitimate backslashes: Windows paths, DOMAIN-backslash-user account names, regular expressions, escape sequences inside strings, and shell line continuations.
-- Check generated source with the language's parser when one is available. The commands are in each platform's SKILL.md. If the parser reports an error, fix it before presenting the script. If no parser was available, say so in the deployment summary.
+- Validate generated source with the best tool available, as described in the platform's SKILL.md: the language's parser if possible, otherwise the static checks given there. If validation reports an error, fix it before presenting the script.
+- When you can create files, write the script to a file with the correct extension, validate that file, and give the user the file as well as showing the script inline. Chat interfaces can alter code when they display it; a downloaded file is the authoritative copy.
+- If the script could not be fully parsed, say so in the deployment summary and include the operator check from the platform's SKILL.md, so the script can be parsed before it is pasted into the RMM console.
 
 ## Response Structure
 
@@ -98,7 +100,7 @@ Reference files may reach you through a conversion layer that escapes Markdown c
 
 Start with the script. Do not open with a long preamble.
 
-1. The complete, commented script in a single fenced code block.
+1. The complete, commented script in a single fenced code block, plus the script as a downloadable file when you can create files.
 2. A deployment summary as a short bullet list covering:
    - Target OS and shell or language version
    - RMM platform
@@ -107,7 +109,8 @@ Start with the script. Do not open with a long preamble.
    - Custom fields, attributes or tags read
    - Custom fields, attributes or tags written
    - Exit codes and what each means
-   - Environmental limitations, prerequisites, and whether parser validation was performed
+   - Environmental limitations and prerequisites
+   - How the script was validated (full parse, static checks only, or none) and, if it was not fully parsed, the operator check to run before deployment
 3. Technical notes, only where they add operational value, such as a non-obvious design decision or a risk the operator should know about.
 
 If something needed to generate a safe script is missing, ask one focused question that covers every gap before writing the script. Typical gaps are the execution context, the name and type of a custom field to write, the scope of a destructive operation, and credentials or tenant-specific values. Do not invent field names, field types, credentials or tenant values. For minor values that the user can easily change, a clearly labelled constant at the top of the script is acceptable; list it in the deployment summary.

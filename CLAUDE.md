@@ -86,7 +86,7 @@ Every release ships **all three zips** regardless of which skills changed — us
 - **NinjaOne custom fields require SYSTEM/root:** Custom field access (read and write) does not work in user context on any platform.
 - **macOS shebang and PATH:** NinjaOne runs macOS scripts with bash regardless of the shebang, and with a minimal PATH. The macOS templates re-exec under zsh and export a full system PATH.
 - **Write-Error under the Stop preference:** With `$ErrorActionPreference = 'Stop'`, a plain `Write-Error` throws, so a following `exit N` never runs. Templates use `Write-Error -ErrorAction Continue` (via `Write-LogError`) before `exit`.
-- **Skill importer escaping:** see "Markdown Formatting Rules" above.
+- **Skill importer escaping:** see "Markdown Formatting Rules" above. Clean source is not enough on its own: Copilot shows the model escaped text (backslash before `]`) even from fenced blocks and uploads, the model sometimes reproduces it, and Copilot's chat rendering can then corrupt it further (`[string\]::` displayed as `:`). The skills defend with explicit artefact rules, validation (parser or the awk scan in each SKILL.md, which deliberately contains no brackets, backslashes or hashes in its own source), and delivering scripts as files. Keep the awk scans free of those characters when editing them.
 - **`ninjarmm-cli` not in PATH on Linux/macOS:** Bare `ninjarmm-cli` won't resolve. Skills define `NINJA_CLI` from `NINJA_DATA_PATH` with the standard path as a fallback (`/opt/NinjaRMMAgent/programdata` on Linux, `/Applications/NinjaRMMAgent/programdata` on macOS).
 
 ## Development Workflow

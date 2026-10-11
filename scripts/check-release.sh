@@ -267,6 +267,47 @@ else
     warn "pwsh not found; PowerShell blocks not checked"
 fi
 
+# --- Check 8: Static scan of PowerShell blocks ------------------------------------
+# Same scan the PowerShell skill gives agents without a PowerShell parser: escaped
+# brackets or hashes, and static calls whose type literal is missing. It needs only
+# awk, so it runs even where pwsh is not installed.
+echo "Scanning PowerShell blocks for lost or escaped type literals..."
+
+shopt -s nullglob
+scan_blocks=("$block_dir"/*.ps1)
+shopt -u nullglob
+if (( ${#scan_blocks[@]} > 0 )); then
+    if scan_output=$(awk '
+        function report(msg) { print FILENAME ":" FNR ": " msg ": " line; bad = 1 }
+        BEGIN { bs = sprintf("%c", 92); ob = sprintf("%c", 91); cb = sprintf("%c", 93); hs = sprintf("%c", 35); bad = 0 }
+        {
+            line = $0
+            if (index(line, bs ob)) report("backslash before an opening bracket")
+            if (index(line, bs cb)) report("backslash before a closing bracket")
+            if (index(line, bs hs)) report("backslash before a hash")
+            n = length(line)
+            for (i = 1; i != n + 1; i++) {
+                if (substr(line, i, 1) != ":") continue
+                before = (i == 1) ? " " : substr(line, i - 1, 1)
+                if (substr(line, i, 2) == "::") {
+                    if (before != cb) report("double colon without a type literal before it")
+                    i++
+                    continue
+                }
+                after = substr(line, i + 1, 1)
+                if (index(" (,=!", before)) {
+                    if (after != tolower(after)) report("colon before a method name; type literal missing")
+                }
+            }
+        }
+        END { exit bad }
+    ' "${scan_blocks[@]}" 2>&1); then
+        pass "No lost or escaped type literals in PowerShell blocks"
+    else
+        while IFS= read -r issue; do fail "${issue#"$block_dir"/}"; done <<< "$scan_output"
+    fi
+fi
+
 # --- Summary --------------------------------------------------------------------
 echo ""
 if [[ $ERRORS -eq 0 ]]; then

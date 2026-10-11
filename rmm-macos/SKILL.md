@@ -109,10 +109,22 @@ Apply the general rules in CORE-CONVENTIONS.md, plus:
 
 - Keep the re-exec guard in POSIX form exactly as in the template: single square brackets and a parameter default, so that it works while the script is still running under bash.
 - Keep legitimate backslashes, such as line continuations and escapes inside strings or regular expressions. Do not add a backslash before square brackets, hash characters, pipes, angle brackets or other operators.
-- When zsh is available, syntax-check the script before presenting it:
+- Some agent environments show reference files and uploaded files with a backslash inserted before square brackets, hash characters and other punctuation. Those backslashes are display artefacts; do not reproduce them.
+- When zsh is available, write the script to a file and syntax-check it before presenting it. Then scan it for backslashes in front of square brackets, because an escaped test bracket can still pass the syntax check. The scan avoids those characters in its own source. Review any hit, because a regular expression may legitimately need one:
 
 ```zsh
 zsh -n /path/to/script.sh
+awk '
+BEGIN { bs = sprintf("%c", 92); ob = sprintf("%c", 91); cb = sprintf("%c", 93) }
+index($0, bs ob) { print FILENAME ":" FNR ": backslash before a bracket: " $0; next }
+index($0, bs cb) { print FILENAME ":" FNR ": backslash before a bracket: " $0 }
+' /path/to/script.sh
+```
+
+- If the script could not be syntax-checked, give the operator this check in the deployment summary. It reads the script from the clipboard on a Mac:
+
+```zsh
+pbpaste | zsh -n && echo "No syntax errors."
 ```
 
 ## Common Mistakes (macOS)

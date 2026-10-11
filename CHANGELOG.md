@@ -33,6 +33,11 @@ Restructure for progressive loading and for compatibility with skill importers t
 - Execution-context checks use `WindowsIdentity.IsSystem`; the Windows Server guard uses `ProductType` (locale-independent) instead of matching "Server" in the caption.
 - macOS: console-user pattern for collecting per-user data from a root script; note on zsh `echo` interpreting backslashes and 1-based arrays.
 - Linux: `/etc/os-release` distro detection, `DEBIAN_FRONTEND=noninteractive`, bash 5.2 pattern-substitution note, HTML-escape helper.
+- Display-artefact defence, from testing in GitHub Copilot. Copilot shows the model skill files and uploads with backslashes before brackets; the model sometimes reproduces them, and the chat display can then corrupt the code (an escaped string type literal before a double colon was shown as a single colon, breaking the script).
+  - PowerShell skill: names the artefact explicitly, adds a self-check (every double colon must follow a closing bracket), and a validation ladder: parse with powershell.exe or pwsh, else an awk static scan that a bash-only sandbox can run, else a manual read-through.
+  - macOS/Linux skills: an awk scan for escaped brackets, because an escaped double-bracket test still passes `zsh -n` and `bash -n`.
+  - CORE-CONVENTIONS: deliver scripts as a downloadable file when possible (it bypasses chat rendering), state how the script was validated, and include an operator check (for example a clipboard parse check on Windows) when it was not fully parsed.
+  - CODE-REVIEW: treat apparent escape artefacts in uploaded scripts as possible display-layer damage and ask the user to check the original.
 - `scripts/check-release.sh` now checks skill names, file set and routing, all shared files, Markdown formatting rules, escape artefacts in code, and syntax of every PowerShell/bash/zsh block (PowerShell also checked for 7-only syntax).
 
 ## [1.4.0] - 2026-05-26
