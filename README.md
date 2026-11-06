@@ -1,6 +1,6 @@
 # RMM Skills for Claude AI
 
-Claude AI Skills for generating production-ready RMM scripts (PowerShell, macOS, Linux) targeting NinjaOne, Action1, and other endpoint management platforms.
+Claude AI Skills for generating production-ready RMM scripts (PowerShell, macOS, Linux) targeting NinjaOne, Action1, Nizlo, and other endpoint management platforms.
 
 ## What Are These?
 
@@ -90,9 +90,11 @@ Once installed, just ask Claude naturally:
 
 > "Review this PowerShell script I'm deploying via Action1 — does it have any issues?"
 
+> "Write an idempotent PowerShell maintenance script for a Nizlo scheduled job and explain its expected stdout, stderr, and exit codes"
+
 > "Convert this Windows RMM script to macOS"
 
-The skill activates automatically based on keywords like "RMM", "NinjaOne", "Action1", or "deploy to endpoints". For general scripting that isn't RMM-related, the skills stay out of the way.
+The skill activates automatically based on keywords like "RMM", "NinjaOne", "Action1", "Nizlo", or "deploy to endpoints". For general scripting that isn't RMM-related, the skills stay out of the way.
 
 ## RMM Platform Support
 
@@ -104,6 +106,8 @@ The skill activates automatically based on keywords like "RMM", "NinjaOne", "Act
 ### Compatible (Generic RMM Patterns)
 
 The shared conventions (non-interactive execution, SYSTEM/root context, stdout/stderr logging) apply to most RMM platforms. If you use a different RMM, the scripts will still follow best practices — you'll just need to substitute the platform-specific custom field commands.
+
+- **Nizlo** — Its [public automation documentation](https://nizlo.com/rmm-automation) describes versioned PowerShell and batch procedures with explicit parameters and timeouts, scheduled or scoped execution, and retained per-endpoint stdout, stderr, exit code, duration, requester, and result. The generic non-interactive, idempotency, validation, logging, and exit-code conventions in these skills apply. Nizlo does not currently publish a platform-specific custom-field cmdlet contract, so do not emit NinjaOne or Action1 field commands for a Nizlo script unless the user supplies a separate supported integration contract.
 
 ## Known Platform Quirks
 
